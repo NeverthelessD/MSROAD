@@ -29,8 +29,10 @@
 
 ### 작업 기록
 - 2026-10-22 사용자: 1.1.0 이 macOS 27 에서 잘 실행됨을 확인. 같은 Dock 앱 구조를 SROAD(1.1.0)와 YTROAD(맥 1.2.0, Apple Silicon · Intel 겸용
-  universal 껍데기)에 옮김 — 각 저장소 CLAUDE.md 참고. MSROAD 쪽 변경: release.sh 가 ci-results 를 명시적 refspec 으로 받도록 수정.
-  `[ ]` 시험용 `ci-probe` 브랜치는 사용자가 저장소 화면에서 지우기로 함(세션 권한으로는 브랜치 삭제 불가).
+  universal 껍데기)에 옮김 — 각 저장소 CLAUDE.md 참고.
+  릴리스 완료: SROAD v1.1.0(실제 맥 시험 19/19), YTROAD 맥 v1.2.0(21/21, Rosetta 로 Intel 도 확인). GitHub Actions 장애로 맥 기계가
+  배정되지 않은 실행이 두 번 있었음 → 워크플로 파일을 바꿔 다시 푸시하면 다시 돈다(workflow_dispatch 도 추가했지만 API 는 세션에서 막혀 있음). MSROAD 쪽 변경: release.sh 가 ci-results 를 명시적 refspec 으로 받도록 수정.
+  시험용 `ci-probe` 브랜치는 사용자가 저장소 화면에서 지우기로 함(세션 권한으로는 브랜치 삭제 불가).
 - 2026-10-22 v1.1.0 — **근본 해결: Dock 에 보이는 정식 맥 앱**. MSROAD.app 본체 = Swift 껍데기(app/shell/main.swift):
   Dock 아이콘 · 메뉴 · 앱 창(WKWebView, Chrome 필요 없음). 엔진(지킴이)은 이 앱의 자식이라 macOS 27 '백그라운드 앱 활동'의 예외
   ("켠 앱이 Dock 에 있음")에 해당 → 우회 없음. 1.0.2~1.0.4 의 도우미 앱 · '켜진 직후 종료 신호 무시'는 모두 없앰
