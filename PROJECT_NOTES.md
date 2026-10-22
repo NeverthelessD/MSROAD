@@ -28,11 +28,12 @@
       폴더 고르기는 앱 안 탐색 화면, 썸네일/HEIC 변환은 Windows 도구로 바꾸기, `releases/latest-win.json`
 
 ### 작업 기록
-- 2026-10-22 (진행 중) v1.0.2 — 사용자: "처음부터" 연결 끊김, YTROAD·SROAD는 괜찮고 SCOREROAD부터 그랬음. 컴퓨터 사용은 거절함.
+- 2026-10-22 v1.0.2 — 사용자: "처음부터" 연결 끊김, YTROAD·SROAD는 괜찮고 SCOREROAD부터 그랬음. 컴퓨터 사용은 거절함.
   맥 엔진 서명은 정상 확인(손상 페이지 0). 원인을 아직 모르니: ① 엔진 지킴이(supervise.go, MSROAD_SUPERVISOR=1) — 새 세션으로 떨어져
   나와 엔진을 자식으로 켜고, 비정상 종료 시 같은 포트·토큰으로 재시작(5분에 5번까지), ② 고정 포트 47917, ③ 토큰 없이 보는
   읽기 전용 진단 페이지 http://127.0.0.1:47917/diag (실행기·지킴이 기록, requests.log, 지난번 엔진 출력) — 내장 브라우저로 직접 읽을 계획,
-  ④ 화면 오류를 /api/clientlog 로 기록, 새로 고침 반복 방지. 남은 일: 리허설(크래시 2종 + 업데이트 재시작) → 1.0.2 빌드 → 사용자 맥에서 /diag 읽기.
+  ④ 화면 오류를 /api/clientlog 로 기록, 새로 고침 반복 방지. 리허설 통과: SIGKILL·SIGABRT 크래시 → 1초 안에 같은 주소로 재시작,
+  창은 그대로 이어짐(카드 유지), 업데이트 → 다시 시작도 지킴이와 함께 정상. 남은 일: 사용자 맥에서 /diag 읽고 진짜 원인 찾기.
   테스트 주의: `pkill -f msroad-engine` 은 내 셸 명령줄과도 맞아서 셸이 죽음 → `pkill -x msroad-engine` 사용.
 - 2026-10-22 v1.0.1 — 사용자 제보: "MSROAD 엔진과 연결이 끊겼어요" 때문에 테스트 불가. 로그를 읽을 수 없어 원인 확정은 못 함.
   가장 유력한 원인: 맥 잠자기/뒤에 둔 창 때문에 10분 쉬기 타이머가 지나 엔진이 꺼짐(잠자는 시간도 세고 있었음).
@@ -101,6 +102,11 @@ osascript 폴더 선택 창, sips 썸네일/HEIC 변환(특히 WEBP · PDF 첫 �
 - 문제 기록(1.0.1): 실행기가 엔진 출력을 `engine.out`(지난번은 `engine.prev.out`)에 남기고, 엔진은 panic 을 스택과 함께
   `engine.log` 에 적는다. 다음 실행 때 '멈춘 기록이 있어요' 알림 → 설정 › 문제 기록 › 기록 복사 로 사용자가 보내 줄 수 있다.
   (Claude는 ~/Library/Application Support 를 직접 읽을 수 없음 — macOS 보호 폴더)
+- 엔진 구조(1.0.2~): 실행기 → `msroad-engine`(MSROAD_SUPERVISOR=1, 지킴이, setsid) → `msroad-engine`(MSROAD_CHILD=1, 진짜 엔진).
+  지킴이는 엔진 종료 코드 0(종료 버튼·오래 쉼·업데이트 재시작)이면 함께 끝나고, 그 밖에는 기록 후 재시작한다.
+  기록 파일(Support 폴더): launcher.log(실행기·지킴이) · requests.log(요청·화면 문제, 크래시 직전 포함) · engine.log/engine.prev.log
+  · engine.out/engine.prev.out(Go 런타임 출력) · alive/clean-exit(지난번이 어떻게 끝났는지).
+- 진단 페이지 `http://127.0.0.1:47917/diag` (토큰 불필요, 읽기 전용, 토큰·악보 내용 없음). 사용자 맥은 Claude가 내장 브라우저로 직접 열어 볼 수 있다.
 - 커밋 작성자: `Nevertheless_D <NeverthelessD@users.noreply.github.com>`
 
 ## 업데이트 내보내는 법 (Claude용)
