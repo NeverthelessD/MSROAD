@@ -228,12 +228,12 @@ export function render(scrollTop) {
   if (S.lib.truncated) body += `<div class="err-box">파일이 너무 많아서 앞쪽 30,000개만 읽었어요. 더 작은 폴더를 골라 보세요.</div>`;
   if (!total) {
     body += S.query
-      ? `<div class="empty"><div style="font-size:38px">🔎</div><b>찾는 악보가 없어요</b>곡 이름 일부, 초성(예: ㄱㅈㅇ), 코드(예: Ab, F#m)로 찾아보세요.</div>`
+      ? `<div class="nothing"><div style="font-size:38px">🔎</div><b>찾는 악보가 없어요</b>곡 이름 일부, 초성(예: ㄱㅈㅇ), 코드(예: Ab, F#m)로 찾아보세요.</div>`
       : S.road === CROSS
-        ? `<div class="empty"><div style="font-size:38px">🎉</div><b>갈림길이 비었어요</b>모든 악보에 코드가 있어요.</div>`
+        ? `<div class="nothing"><div style="font-size:38px">🎉</div><b>갈림길이 비었어요</b>모든 악보에 코드가 있어요.</div>`
         : !S.sheets.length
-          ? `<div class="empty"><div style="font-size:38px">🗂️</div><b>이 폴더에는 악보 파일이 없어요</b>JPG · PNG · HEIC · GIF · WEBP · PDF 파일을 읽어요.<br><button class="btn" data-act="choose" style="margin-top:16px">다른 폴더 고르기</button></div>`
-          : `<div class="empty"><div style="font-size:38px">🛣️</div><b>이 ROAD에는 아직 악보가 없어요</b></div>`;
+          ? `<div class="nothing"><div style="font-size:38px">🗂️</div><b>이 폴더에는 악보 파일이 없어요</b>JPG · PNG · HEIC · GIF · WEBP · PDF 파일을 읽어요.<br><button class="btn" data-act="choose" style="margin-top:16px">다른 폴더 고르기</button></div>`
+          : `<div class="nothing"><div style="font-size:38px">🛣️</div><b>이 ROAD에는 아직 악보가 없어요</b></div>`;
   }
   body += secs.map((sec) => `<section class="sec r${sec.road}">
       ${sec.label ? `<div class="sec-h">${sec.chord ? plate(sec.chord) : `<b>${esc(sec.label)}</b>`}<span class="ct">${sec.items.length}개</span><span class="rule"></span></div>` : ''}
