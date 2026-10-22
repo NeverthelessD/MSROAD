@@ -2,7 +2,7 @@
 // made by. Nevertheless_D
 import {
   S, $, $$, esc, api, on, emit, ROADS, CROSS, thumbURL, saveUI, roadOf, chordOrder, plate,
-  prepTitle, parseQuery, matchSheet, highlight, toast, shortPath, modalOpen, versionsOf,
+  prepTitle, parseQuery, matchSheet, highlight, toast, shortPath, modalOpen, versionsOf, IS_SHELL, logoSVG,
 } from './core.js';
 import { openViewer, viewerOpen, viewerSync, renderPdfThumb } from './viewer.js';
 import { openPicker, closePicker, pickerOpen } from './picker.js';
@@ -395,6 +395,7 @@ async function poll() {
   try {
     const j = await api('/api/poll');
     S.update = j.update; S.build = j.build; S.canUndo = j.canUndo;
+    if (j.shell === 'native' && !IS_SHELL) return movedNotice();
     renderVersion();
     if (j.rev !== S.lib.rev) await loadLibrary();
   } catch { /* 엔진이 다시 시작하는 중일 수 있어요 */ }
@@ -423,3 +424,16 @@ async function checkCrash() {
 init().catch((e) => { if (!e.offline) toast('⚠️ ' + esc(e.message), { ms: 8000 }); });
 
 export { closePicker };
+
+// 예전 방식(Chrome 창)으로 열린 화면: 이제 MSROAD 는 Dock 에 보이는 앱으로 열려요
+let moved = false;
+function movedNotice() {
+  if (moved) return;
+  moved = true;
+  const el = document.createElement('div');
+  el.className = 'offline';
+  el.innerHTML = `<div class="offline-card">${logoSVG(64)}<h2>MSROAD가 새 모습으로 바뀌었어요</h2>
+    <p>이제 MSROAD는 <b>Dock에 아이콘이 있는 앱</b>으로 열려요.<br>이 창은 닫아도 돼요.</p></div>`;
+  document.body.append(el);
+  setTimeout(() => { try { window.close(); } catch { /* 닫을 수 없으면 안내만 보여 줘요 */ } }, 2500);
+}

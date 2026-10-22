@@ -387,6 +387,15 @@ func (u *Updater) Restart(port int, token string) error {
 	if err != nil {
 		return err
 	}
+	// Dock 앱 방식: 엔진이 '다시 열어 주세요' 표시를 남기고 끝나면, 앱이 새 버전을 macOS 정식 방법으로 다시 열어요
+	if nativeShell() {
+		writeFileAtomic(filepath.Join(u.support, "restart-requested"), []byte(time.Now().Format(time.RFC3339)), 0o644)
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			app.shutdownWhy("업데이트 후 다시 시작")
+		}()
+		return nil
+	}
 	launcher := filepath.Join(appPath, "Contents", "MacOS", "MSROAD")
 	if !fileExists(launcher) {
 		return errors.New("앱을 찾을 수 없어요")

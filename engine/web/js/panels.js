@@ -195,7 +195,7 @@ export function openSettings(focus) {
 export async function quitApp() {
   if (!(await confirmBox('MSROAD 종료', 'MSROAD를 끌까요? 악보 파일은 그대로 있어요.', '종료'))) return;
   try { await api('/api/quit', {}); } catch { /* 이미 꺼졌어요 */ }
-  showEnded('MSROAD를 껐어요. 이 창을 닫아도 돼요.');
+  showEnded(navigator.userAgent.includes('MSROADShell') ? 'MSROAD를 끄는 중이에요…' : 'MSROAD를 껐어요. 이 창을 닫아도 돼요.');
   setTimeout(() => window.close(), 400);
 }
 

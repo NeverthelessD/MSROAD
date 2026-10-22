@@ -143,6 +143,7 @@ func main() {
 		}()
 	}
 	go app.idleWatcher()
+	go app.watchParent()
 	go func() { defer recoverLog("autoLoop"); app.upd.autoLoop() }()
 	srv := &http.Server{Handler: hostGuard(recordRequests(app.routes())), ErrorLog: log.Default()}
 	log.Fatal(srv.Serve(ln))
@@ -191,6 +192,10 @@ func (a *App) rescan() bool {
 // 창을 닫고 오랫동안(잠자기 시간은 빼고) 아무 요청이 없으면 스스로 종료합니다.
 func (a *App) idleWatcher() {
 	defer recoverLog("idleWatcher")
+	// Dock 앱(MSROAD.app)이 켠 엔진은 앱이 켜져 있는 동안 계속 켜 둬요. 앱을 종료하면 엔진도 함께 꺼져요.
+	if nativeShell() {
+		return
+	}
 	for range time.Tick(15 * time.Second) {
 		idle := time.Since(started) - time.Duration(a.lastSeen.Load())
 		if idle > idleLimit && !a.upd.Busy() {
@@ -201,6 +206,22 @@ func (a *App) idleWatcher() {
 }
 
 func (a *App) shutdown() { a.shutdownWhy("종료") }
+
+// nativeShell: Dock 에 보이는 맥 앱(app/shell/main.swift)이 엔진을 켰는지
+func nativeShell() bool { return env("SHELL") == "native" }
+
+// watchParent: 지킴이(부모)가 사라지면 엔진도 끝나요 — 혼자 남아 몰래 돌지 않게
+func (a *App) watchParent() {
+	if env("CHILD") != "1" {
+		return
+	}
+	ppid := os.Getppid()
+	for range time.Tick(2 * time.Second) {
+		if os.Getppid() != ppid {
+			a.shutdownWhy("지킴이가 사라짐")
+		}
+	}
+}
 
 func (a *App) shutdownWhy(why string) {
 	log.Printf("shutdown: %s", why)
@@ -334,7 +355,7 @@ func (a *App) routes() http.Handler {
 	}
 
 	api("/api/ping", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"ok": true, "build": build})
+		writeJSON(w, map[string]any{"ok": true, "build": build, "shell": env("SHELL")})
 	})
 	api("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true})
@@ -360,7 +381,7 @@ func (a *App) routes() http.Handler {
 	})
 	api("/api/poll", func(w http.ResponseWriter, r *http.Request) {
 		canUndo, undoDesc := a.rn.CanUndo()
-		writeJSON(w, map[string]any{"build": build, "rev": a.lib.Rev(), "update": a.upd.State(), "canUndo": canUndo, "undoDesc": undoDesc})
+		writeJSON(w, map[string]any{"build": build, "rev": a.lib.Rev(), "update": a.upd.State(), "canUndo": canUndo, "undoDesc": undoDesc, "shell": env("SHELL")})
 	})
 	// 실행기가 묻는 곳: 화면에 보이는 창이 방금 다시 이어졌나요? (그러면 새 창을 또 열지 않아요)
 	api("/api/attached", func(w http.ResponseWriter, r *http.Request) {

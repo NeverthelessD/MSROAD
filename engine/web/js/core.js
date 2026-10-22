@@ -2,6 +2,8 @@
 // made by. Nevertheless_D
 
 export const T = new URLSearchParams(location.search).get('t') || '';
+// Dock 에 보이는 MSROAD 앱(1.1.0~) 안에서 열린 화면인지
+export const IS_SHELL = navigator.userAgent.includes('MSROADShell');
 export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
