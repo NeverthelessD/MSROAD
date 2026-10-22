@@ -385,7 +385,18 @@ async function init() {
   await poll();
   if (S.lib.rev < 0) await loadLibrary();
   setInterval(poll, 2500);
+  checkCrash();
 }
-init().catch((e) => toast('⚠️ ' + esc(e.message), { ms: 8000 }));
+// 창이 다시 보이면 바로 확인해요 (뒤에 있던 창은 Chrome이 잠시 멈춰 둘 수 있어요)
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poll(); });
+
+// 지난번에 엔진이 갑자기 멈췄다면 알려 줘요
+async function checkCrash() {
+  try {
+    const j = await api('/api/crash');
+    if (j.report) toast('지난번에 MSROAD가 갑자기 멈춘 기록이 있어요', { action: '기록 보기', ms: 12000, onAction: () => openSettings('crash') });
+  } catch { /* 넘어가요 */ }
+}
+init().catch((e) => { if (!e.offline) toast('⚠️ ' + esc(e.message), { ms: 8000 }); });
 
 export { closePicker };

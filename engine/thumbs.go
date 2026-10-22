@@ -41,6 +41,7 @@ func NewThumbs(support string) *Thumbs {
 
 // 90일 넘게 안 쓴 캐시는 지워요.
 func (t *Thumbs) prune() {
+	defer recoverLog("prune")
 	time.Sleep(30 * time.Second)
 	cut := time.Now().Add(-90 * 24 * time.Hour)
 	for _, sub := range []string{"thumb", "full"} {

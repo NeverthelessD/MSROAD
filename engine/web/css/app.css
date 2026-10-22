@@ -444,3 +444,15 @@ mark { background: color-mix(in srgb, var(--accent) 26%, transparent); color: in
 .ctx hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
 .ended { position: fixed; inset: 0; z-index: 140; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: var(--muted); }
 .ended b { color: var(--text); font-size: 16px; }
+
+/* ── 엔진과 연결이 끊겼을 때 ─────────────────────────────────── */
+.offline { position: fixed; inset: 0; z-index: 150; display: grid; place-items: center; padding: 30px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: vIn .2s; }
+.offline-card { width: min(460px, 100%); padding: 30px 32px; border-radius: 24px; background: var(--panel); border: 1px solid var(--line2); box-shadow: var(--shadow); text-align: center; }
+.offline-card img { border-radius: 16px; }
+.offline-card h2 { margin: 16px 0 8px; font-size: 20px; font-weight: 800; }
+.offline-card p { margin: 0; color: var(--muted); line-height: 1.7; font-size: 13.5px; }
+.offline-card p b { color: var(--text); }
+.offline-wait { margin-top: 20px; display: inline-flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 650; color: var(--muted); }
+.offline-wait i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line2); border-top-color: var(--brand); animation: spin .9s linear infinite; }
+.crash { max-height: 160px; overflow: auto; margin: 0; padding: 10px; border-radius: 10px; background: var(--sunken); font: 11px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; user-select: text; -webkit-user-select: text; }

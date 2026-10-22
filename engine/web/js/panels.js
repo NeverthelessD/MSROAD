@@ -1,6 +1,6 @@
 // MSROAD — 폴더 고르기, 설정, 버전 · 업데이트
 // made by. Nevertheless_D
-import { S, $, esc, api, emit, toast, openModal, closeModal, confirmBox, shortPath, sleep, ROADS } from './core.js';
+import { S, $, esc, api, emit, toast, openModal, closeModal, confirmBox, shortPath, sleep, ROADS, logoSVG } from './core.js';
 
 // ── 폴더 ──
 export async function chooseFolder(path) {
@@ -130,9 +130,11 @@ document.addEventListener('change', async (e) => {
 });
 
 // ── 설정 ──
-export function openSettings() {
+export function openSettings(focus) {
   const body = document.createElement('div');
   body.style.cssText = 'display:flex;flex-direction:column;gap:12px';
+  let crash = null;
+  api('/api/crash').then((j) => { crash = j.report || ''; render(); if (focus === 'crash') body.querySelector('[data-crash]')?.scrollIntoView({ block: 'center' }); }).catch(() => {});
   const render = () => {
     const st = S.settings;
     const folder = st.folder;
@@ -158,6 +160,10 @@ export function openSettings() {
         <div class="kv"><span>업데이트</span><button class="link" data-s="update">버전 · 업데이트 열기</button></div>
         <div class="kv"><span>사용한 오픈소스</span><span style="text-align:right">PDF.js (Mozilla, Apache-2.0) · Pretendard · Unbounded (OFL)</span></div>
         <button class="btn danger" data-s="quit" style="margin-top:4px">MSROAD 종료</button></div>
+      <div class="box" data-crash><h4>문제 기록</h4>
+        ${crash === null ? '<div class="note">확인하는 중…</div>' : crash
+          ? `<div class="note">MSROAD가 갑자기 멈췄던 기록이에요. <b>복사</b>를 눌러 만든 사람에게 보내 주면 원인을 찾을 수 있어요.</div><pre class="crash">${esc(crash)}</pre><div><button class="btn" data-s="copycrash">기록 복사</button></div>`
+          : '<div class="note">멈췄던 기록이 없어요 ✓</div>'}</div>
       <div style="text-align:center;font:600 10.5px Unbounded,sans-serif;letter-spacing:.05em;color:var(--muted)">made by. Nevertheless_D</div>`;
   };
   render();
@@ -175,6 +181,7 @@ export function openSettings() {
       else if (s === 'reveal') api('/api/reveal', {});
       else if (s === 'update') { closeModal(); openUpdate(); }
       else if (s === 'quit') { closeModal(); quitApp(); }
+      else if (s === 'copycrash') { await navigator.clipboard.writeText(`MSROAD v${S.settings.build}\n${crash}`); e.target.textContent = '복사했어요 ✓'; }
     } catch (err) { toast('⚠️ ' + esc(err.message)); }
   });
   body.addEventListener('change', async (e) => {
@@ -193,7 +200,8 @@ export async function quitApp() {
 }
 
 export function showEnded(msg) {
+  S.offline = true; // 일부러 끈 거라서 '쉬고 있어요' 안내는 띄우지 않아요
   let el = $('.ended');
   if (!el) { el = document.createElement('div'); el.className = 'ended'; document.body.append(el); }
-  el.innerHTML = `<img src="/icon.png" width="72" height="72" alt=""><b>${esc(msg)}</b><span>made by. Nevertheless_D</span>`;
+  el.innerHTML = `${logoSVG(72)}<b>${esc(msg)}</b><span>made by. Nevertheless_D</span>`;
 }

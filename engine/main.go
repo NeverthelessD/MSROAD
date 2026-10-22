@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,11 +54,21 @@ type App struct {
 	rn     *Renamer
 	upd    *Updater
 
-	lastSeen atomic.Int64
+	lastVis  atomic.Int64 // 화면에 보이는 창이 마지막으로 연락한 시각 (같은 시계)
+	lastSeen atomic.Int64 // 마지막 요청 시각 (started 기준 경과 ns, 잠자기 동안은 멈춰 있는 시계)
 	scanMu   sync.Mutex
 }
 
 var app *App
+
+// started 는 단조 시계 기준점이에요. time.Since(started) 는 맥이 잠자는 동안 늘어나지 않아서,
+// 뚜껑을 닫았다 열어도 엔진이 "오래 쉬었다"고 착각해 꺼지지 않아요.
+var started = time.Now()
+
+func touch() { app.lastSeen.Store(int64(time.Since(started))) }
+
+// 창이 열려 있어도 Chrome이 뒤에 있는 창을 잠시 멈추게 할 수 있어서 넉넉하게 기다려요.
+const idleLimit = 90 * time.Minute
 
 func env(k string) string { return os.Getenv("MSROAD_" + k) }
 
@@ -85,22 +96,24 @@ func main() {
 		log.SetOutput(io.MultiWriter(os.Stderr, f))
 	}
 	app.loadSettings()
-	app.lastSeen.Store(time.Now().Unix())
+	touch()
 	app.lib = NewLibrary()
 	app.thumbs = NewThumbs(support)
 	app.rn = &Renamer{}
 	app.upd = NewUpdater(support)
-	go app.rescan()
+	go func() { defer recoverLog("startup scan"); app.rescan() }()
 
 	ln := listen(env("PORT"))
 	app.port = ln.Addr().(*net.TCPAddr).Port
 	writeFileAtomic(filepath.Join(support, "token"), []byte(token), 0o600)
 	writeFileAtomic(filepath.Join(support, "port"), []byte(strconv.Itoa(app.port)), 0o644)
+	// lastport 는 지우지 않아요. 엔진이 꺼진 뒤 앱을 다시 열면 같은 주소로 켜져서, 열려 있던 창이 그대로 이어져요.
+	writeFileAtomic(filepath.Join(support, "lastport"), []byte(strconv.Itoa(app.port)), 0o644)
 	log.Printf("MSROAD %s listening on %d", build, app.port)
 
 	go app.idleWatcher()
-	go app.upd.autoLoop()
-	srv := &http.Server{Handler: hostGuard(app.routes())}
+	go func() { defer recoverLog("autoLoop"); app.upd.autoLoop() }()
+	srv := &http.Server{Handler: hostGuard(app.routes()), ErrorLog: log.Default()}
 	log.Fatal(srv.Serve(ln))
 }
 
@@ -129,11 +142,13 @@ func (a *App) rescan() bool {
 
 // ---------------------------------------------------------------- lifecycle
 
-// 창을 닫고 10분 동안 아무 요청이 없으면 스스로 종료합니다.
+// 창을 닫고 오랫동안(잠자기 시간은 빼고) 아무 요청이 없으면 스스로 종료합니다.
 func (a *App) idleWatcher() {
+	defer recoverLog("idleWatcher")
 	for range time.Tick(15 * time.Second) {
-		idle := time.Now().Unix() - a.lastSeen.Load()
-		if idle > 600 && !a.upd.Busy() {
+		idle := time.Since(started) - time.Duration(a.lastSeen.Load())
+		if idle > idleLimit && !a.upd.Busy() {
+			log.Printf("idle for %s, shutting down", idle.Round(time.Second))
 			a.shutdown()
 		}
 	}
@@ -168,7 +183,13 @@ func (a *App) saveSettings() {
 func (a *App) Settings() Settings {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.settings
+	s := a.settings
+	s.UI = make(map[string]any, len(a.settings.UI))
+	for k, v := range a.settings.UI {
+		s.UI[k] = v
+	}
+	s.Recent = append([]string(nil), a.settings.Recent...)
+	return s
 }
 
 func (a *App) settingsJSON() map[string]any {
@@ -246,7 +267,16 @@ func (a *App) routes() http.Handler {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
-			a.lastSeen.Store(time.Now().Unix())
+			touch()
+			if r.URL.Query().Get("vis") == "1" {
+				a.lastVis.Store(int64(time.Since(started)))
+			}
+			defer func() {
+				if v := recover(); v != nil {
+					log.Printf("PANIC in %s: %v\n%s", path, v, debug.Stack())
+					jsonError(w, 500, "앱 안에서 문제가 생겼어요. 다시 시도해 주세요 (설정 → 문제 기록에 남았어요)")
+				}
+			}()
 			h(w, r)
 		})
 	}
@@ -261,6 +291,14 @@ func (a *App) routes() http.Handler {
 	api("/api/poll", func(w http.ResponseWriter, r *http.Request) {
 		canUndo, undoDesc := a.rn.CanUndo()
 		writeJSON(w, map[string]any{"build": build, "rev": a.lib.Rev(), "update": a.upd.State(), "canUndo": canUndo, "undoDesc": undoDesc})
+	})
+	// 실행기가 묻는 곳: 화면에 보이는 창이 방금 다시 이어졌나요? (그러면 새 창을 또 열지 않아요)
+	api("/api/attached", func(w http.ResponseWriter, r *http.Request) {
+		v := a.lastVis.Load()
+		writeJSON(w, map[string]any{"ok": true, "visible": v > 0 && time.Since(started)-time.Duration(v) < 3*time.Second})
+	})
+	api("/api/crash", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"ok": true, "report": crashReport(a.support)})
 	})
 	api("/api/library", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, a.lib.Snapshot())
@@ -299,7 +337,7 @@ func (a *App) routes() http.Handler {
 		writeJSON(w, a.upd.State())
 	})
 	api("/api/update/install", func(w http.ResponseWriter, r *http.Request) {
-		go a.upd.Install()
+		go func() { defer recoverLog("install"); a.upd.Install() }()
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	api("/api/update/rollback", func(w http.ResponseWriter, r *http.Request) {
@@ -581,4 +619,35 @@ func init() {
 	mime.AddExtensionType(".mjs", "text/javascript")
 	mime.AddExtensionType(".bcmap", "application/octet-stream")
 	mime.AddExtensionType(".pfb", "application/octet-stream")
+}
+
+func recoverLog(where string) {
+	if v := recover(); v != nil {
+		log.Printf("PANIC in %s: %v\n%s", where, v, debug.Stack())
+	}
+}
+
+// crashReport: 지난번 엔진이 갑자기 멈췄다면 그 기록(engine.prev.out)과 이번 기록의 문제 부분을 돌려줘요.
+func crashReport(support string) string {
+	var parts []string
+	if b, err := os.ReadFile(filepath.Join(support, "engine.prev.out")); err == nil {
+		t := string(b)
+		if strings.Contains(t, "panic") || strings.Contains(t, "fatal error") || strings.Contains(t, "PANIC") {
+			if len(t) > 6000 {
+				t = t[len(t)-6000:]
+			}
+			parts = append(parts, "[지난번 실행]\n"+t)
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(support, "engine.log")); err == nil {
+		t := string(b)
+		if i := strings.Index(t, "PANIC"); i >= 0 {
+			t = t[i:]
+			if len(t) > 6000 {
+				t = t[:6000]
+			}
+			parts = append(parts, "[이번 실행]\n"+t)
+		}
+	}
+	return strings.Join(parts, "\n\n")
 }

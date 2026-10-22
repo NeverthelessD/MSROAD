@@ -26,6 +26,7 @@ export const S = {
   size: 'm',           // s | m | l
   visible: [],         // 지금 화면에 보이는 순서 (미리보기 화살표용)
   canUndo: false,
+  offline: false,
 };
 
 const listeners = {};
@@ -36,7 +37,16 @@ export async function api(path, body) {
   const init = { method: body === undefined ? 'GET' : 'POST', headers: { 'x-token': T } };
   if (body !== undefined) { init.body = JSON.stringify(body); init.headers['content-type'] = 'application/json'; }
   let r;
-  try { r = await fetch(path, init); } catch { throw new Error('MSROAD 엔진과 연결이 끊겼어요. 앱을 다시 실행해 주세요.'); }
+  try { r = await fetch(path, init); } catch {
+    // 잠깐 끊긴 것일 수 있어서 한 번 더 해 봐요
+    await sleep(800);
+    try { r = await fetch(path, init); } catch {
+      goOffline();
+      const e = new Error('MSROAD 엔진과 연결되지 않았어요');
+      e.offline = true;
+      throw e;
+    }
+  }
   let j = {};
   try { j = await r.json(); } catch { /* ignore */ }
   if (!r.ok || j.ok === false) throw new Error(j.error || `요청에 실패했어요 (${r.status})`);
@@ -151,6 +161,7 @@ export function highlight(s, hits) {
 // ── 작은 UI 도구 ──
 let toastTimer;
 export function toast(msg, opts = {}) {
+  if (S.offline) return; // 연결이 끊긴 동안에는 안내 화면이 대신 설명해요
   const el = $('#toast');
   clearTimeout(toastTimer);
   el.innerHTML = `<span>${msg}</span>${opts.action ? `<button>${esc(opts.action)}</button>` : ''}`;
@@ -200,4 +211,40 @@ export function shortPath(p) {
 // 같은 곡의 다른 키 (코드 순서대로). 같은 코드가 여러 폴더에 있으면 모두 보여 줘요.
 export function versionsOf(s) {
   return S.bySong.get(s.song) || [s];
+}
+
+// ── 엔진과 연결이 끊겼을 때 ──
+// 엔진은 오래 쓰지 않으면 스스로 쉬어요. 앱을 다시 열면 같은 주소로 켜지니까, 이 창은 기다렸다가 저절로 이어져요.
+export function goOffline() {
+  if (S.offline) return;
+  S.offline = true;
+  $('#toast').hidden = true;
+  const el = document.createElement('div');
+  el.className = 'offline';
+  el.innerHTML = `<div class="offline-card">
+      ${logoSVG(64)}
+      <h2>MSROAD가 잠시 쉬고 있어요</h2>
+      <p>한동안 쓰지 않았거나 맥이 잠자기에 들어가면 엔진이 쉬어요.<br><b>Dock이나 응용 프로그램 폴더에서 MSROAD를 다시 열면</b> 이 창이 저절로 이어져요.</p>
+      <div class="offline-wait"><i></i>다시 연결되기를 기다리는 중</div>
+    </div>`;
+  document.body.append(el);
+  const tryPing = async () => {
+    try {
+      const r = await fetch(`/api/ping?vis=${document.visibilityState === 'visible' ? 1 : 0}`, { headers: { 'x-token': T } });
+      if (r.ok) { location.reload(); return; }
+    } catch { /* 아직 꺼져 있어요 */ }
+    setTimeout(tryPing, 1000);
+  };
+  setTimeout(tryPing, 1000);
+}
+
+// 엔진이 꺼져 있어도 보이도록 로고는 그림 파일이 아니라 페이지 안에서 그려요
+export function logoSVG(size) {
+  const svg = document.querySelector('.brand .logo')?.cloneNode(true);
+  if (!svg) return '';
+  svg.setAttribute('width', size); svg.setAttribute('height', size);
+  svg.style.borderRadius = Math.round(size * 0.24) + 'px';
+  svg.querySelector('linearGradient')?.setAttribute('id', 'lg' + size);
+  svg.querySelector('rect')?.setAttribute('fill', `url(#lg${size})`);
+  return svg.outerHTML;
 }

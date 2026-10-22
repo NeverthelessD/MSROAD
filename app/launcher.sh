@@ -87,10 +87,20 @@ MSROAD를 응용 프로그램 폴더로 옮긴 뒤 다시 실행해 주세요."
 fi
 
 # 3) 엔진 켜기
+#    엔진이 쉬다가 꺼졌던 거라면 지난번과 같은 주소(포트·토큰)로 켜요.
+#    그러면 열어 두었던 MSROAD 창이 스스로 다시 이어져요.
+REUSED=""
+if [ -z "$RESTART" ] && [ -s "$SUPPORT/lastport" ] && [ -s "$SUPPORT/token" ]; then
+  PREF_PORT="$(cat "$SUPPORT/lastport")"
+  TOKEN="$(cat "$SUPPORT/token")"
+  REUSED=1
+fi
 [ -n "$TOKEN" ] || TOKEN="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 32)"
 rm -f "$SUPPORT/port"
+# 지난번 기록은 engine.prev.out 으로 남겨 둬요 (갑자기 멈췄을 때 원인을 찾으려고)
+[ -f "$SUPPORT/engine.out" ] && mv -f "$SUPPORT/engine.out" "$SUPPORT/engine.prev.out"
 MSROAD_TOKEN="$TOKEN" MSROAD_SUPPORT="$SUPPORT" MSROAD_APP="$APP" MSROAD_PORT="$PREF_PORT" MSROAD_RESTART="$RESTART" \
-  nohup "$ENGINE" > /dev/null 2>&1 < /dev/null &
+  nohup "$ENGINE" > "$SUPPORT/engine.out" 2>&1 < /dev/null &
 disown
 
 for _ in $(seq 1 75); do [ -s "$SUPPORT/port" ] && break; sleep 0.2; done
@@ -104,6 +114,15 @@ PORT="$(cat "$SUPPORT/port")"
 # 4) 앱 창 열기 (다시 시작이고 같은 포트라면 열려 있던 창이 스스로 새로고침해요)
 if [ -n "$RESTART" ] && [ "$PORT" = "$PREF_PORT" ]; then
   exit 0
+fi
+# 쉬고 있던 창이 화면에 열려 있었다면 그 창이 저절로 이어지니까, 새 창은 열지 않아요
+if [ -n "$REUSED" ] && [ "$PORT" = "$PREF_PORT" ]; then
+  for _ in 1 2 3 4 5 6 7 8; do
+    sleep 0.2
+    case "$(curl -fs -m 1 -H "x-token: $TOKEN" "http://127.0.0.1:$PORT/api/attached" 2>/dev/null)" in
+      *'"visible":true'*) exit 0 ;;
+    esac
+  done
 fi
 open_ui "$PORT" "$TOKEN"
 exit 0
