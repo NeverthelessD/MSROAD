@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MSROAD</title>
+<link rel="icon" href="/icon.png">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">
+      <svg class="logo" width="34" height="34" viewBox="100 100 824 824" aria-hidden="true">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2160"/><stop offset="1" stop-color="#14122b"/></linearGradient></defs>
+        <rect x="100" y="100" width="824" height="824" rx="200" fill="url(#lg)"/>
+        <g stroke-linecap="round" fill="none" stroke-width="44">
+          <path d="M196 836 L452 430" stroke="#ff5d6c"/><path d="M354 836 L482 430" stroke="#ffb030"/><path d="M512 836 L512 430" stroke="#34c77b"/>
+          <path d="M670 836 L542 430" stroke="#3b8cff"/><path d="M828 836 L572 430" stroke="#9b6bff"/>
+        </g>
+        <g fill="#fff"><ellipse cx="478" cy="336" rx="62" ry="46" transform="rotate(-22 478 336)"/><rect x="522" y="148" width="22" height="196" rx="11"/><path d="M533 150 C 600 170, 640 210, 628 282 C 618 240, 590 222, 540 214 Z"/></g>
+      </svg>
+      <div>
+        <div class="brand-name">MSROAD</div>
+        <div class="brand-sub">악보 분류 · 미리보기</div>
+      </div>
+    </div>
+
+    <label class="search" id="searchBox">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <input id="q" type="text" placeholder="곡 이름, 초성(ㄱㅈ), 코드(Ab · F#m)로 찾기" autocomplete="off" spellcheck="false">
+      <button class="search-x" id="qClear" title="지우기 (esc)" hidden>✕</button>
+      <kbd>⌘F</kbd>
+    </label>
+
+    <div class="top-actions">
+      <button class="folder-btn" id="folderBtn" title="악보 폴더 바꾸기">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4.2c0-.9.7-1.6 1.6-1.6h3l1.5 1.6h5.3c.9 0 1.6.7 1.6 1.6v6.1c0 .9-.7 1.6-1.6 1.6H3.1c-.9 0-1.6-.7-1.6-1.6z" fill="currentColor"/></svg>
+        <span id="folderName">폴더 고르기</span>
+      </button>
+      <button class="icon-btn" id="rescanBtn" title="폴더 다시 읽기"><svg width="15" height="15" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4"/><path d="M12.2 1.6v2.8H9.4"/></g></svg></button>
+      <button class="ver" id="verBtn" title="버전 · 업데이트"><i></i><span id="verText">v</span></button>
+      <div class="seg-icons" id="themeSeg">
+        <button data-theme="system" title="macOS 설정 따르기"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg></button>
+        <button data-theme="light" title="라이트 모드"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 1v1.8M8 13.2V15M1 8h1.8M13.2 8H15M3.05 3.05l1.27 1.27M11.68 11.68l1.27 1.27M3.05 12.95l1.27-1.27M11.68 4.32l1.27-1.27"/></g></svg></button>
+        <button data-theme="dark" title="다크 모드"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M13.6 10.4A6 6 0 0 1 5.6 2.4a6 6 0 1 0 8 8z" fill="currentColor"/></svg></button>
+      </div>
+      <button class="icon-btn" id="settingsBtn" title="설정"><svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M9.4 1l.35 1.7a5.6 5.6 0 0 1 1.3.75l1.65-.55 1.4 2.4-1.3 1.15a5.7 5.7 0 0 1 0 1.5l1.3 1.15-1.4 2.4-1.65-.55a5.6 5.6 0 0 1-1.3.75L9.4 15H6.6l-.35-1.7a5.6 5.6 0 0 1-1.3-.75l-1.65.55-1.4-2.4 1.3-1.15a5.7 5.7 0 0 1 0-1.5L1.9 6.9l1.4-2.4 1.65.55a5.6 5.6 0 0 1 1.3-.75L6.6 1zM8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z"/></svg></button>
+      <button class="icon-btn" id="quitBtn" title="MSROAD 종료"><svg width="16" height="16" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 1.8v6"/><path d="M4.6 4a5.2 5.2 0 1 0 6.8 0"/></g></svg></button>
+    </div>
+  </header>
+
+  <nav class="rail" id="rail"></nav>
+  <main class="main" id="main"></main>
+  <div class="banner" id="banner" hidden></div>
+  <footer class="foot">made by. Nevertheless_D</footer>
+</div>
+
+<div class="viewer" id="viewer" hidden></div>
+<div id="modalRoot"></div>
+<div class="pop" id="pop" hidden></div>
+<div class="ctx" id="ctx" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

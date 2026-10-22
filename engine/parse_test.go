@@ -3,7 +3,10 @@ package main
 import "testing"
 
 func TestParse(t *testing.T) {
-	cases := []struct{ in, prefix, chord string; page int }{
+	cases := []struct {
+		in, prefix, chord string
+		page              int
+	}{
 		{"구주의십자가보혈로Ab", "구주의십자가보혈로", "Ab", 0},
 		{"광야를지나며F#m", "광야를지나며", "F#m", 0},
 		{"Amazing Grace_G", "Amazing Grace", "G", 0},
@@ -42,15 +45,15 @@ func TestParse(t *testing.T) {
 		}
 	}
 	// 새 이름
-	s := Sheet{prefix: "Amazing Grace"}
+	s := Sheet{Prefix: "Amazing Grace"}
 	if got := newStemFor(s, "G", &Page{}); got != "Amazing Grace_G" {
 		t.Error(got)
 	}
-	s = Sheet{prefix: "주의은혜라"}
-	if got := newStemFor(s, "A", &Page{suffix: "_1"}); got != "주의은혜라A_1" {
+	s = Sheet{Prefix: "주의은혜라"}
+	if got := newStemFor(s, "A", &Page{Suffix: "_1"}); got != "주의은혜라A_1" {
 		t.Error(got)
 	}
-	s = Sheet{prefix: "주의 사랑", Sep: " ", Chord: "C"}
+	s = Sheet{Prefix: "주의 사랑", Sep: " ", Chord: "C"}
 	if got := newStemFor(s, "D", &Page{}); got != "주의 사랑 D" {
 		t.Error(got)
 	}

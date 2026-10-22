@@ -30,13 +30,13 @@ var sheetExts = map[string]string{
 const maxFiles = 30000
 
 type Page struct {
-	N      int    `json:"n"`      // 쪽 번호 (_1 → 1). 번호 없으면 0
-	Name   string `json:"name"`   // 파일 이름
-	Ext    string `json:"ext"`    // .jpg …
-	Kind   string `json:"kind"`   // image | heic | pdf
+	N      int    `json:"n"`    // 쪽 번호 (_1 → 1). 번호 없으면 0
+	Name   string `json:"name"` // 파일 이름
+	Ext    string `json:"ext"`  // .jpg …
+	Kind   string `json:"kind"` // image | heic | pdf
 	Size   int64  `json:"size"`
 	Mod    int64  `json:"mod"`    // ms
-	suffix string // 원래 쪽 표시 (_1, _01 …)
+	Suffix string `json:"suffix"` // 원래 쪽 표시 (_1, _01 …)
 	path   string
 }
 
@@ -50,7 +50,7 @@ type Sheet struct {
 	Sep    string  `json:"sep"`
 	Pages  []*Page `json:"pages"`
 	Mod    int64   `json:"mod"`
-	prefix string  // 코드 앞 원래 글자 (구분자 제외)
+	Prefix string  `json:"prefix"` // 코드 앞 원래 글자 (구분자 제외)
 }
 
 type Library struct {
@@ -320,7 +320,7 @@ func buildSheets(files []fileInfo) ([]*Sheet, map[string]*Sheet) {
 				Chord:  p.chord,
 				Dir:    composeHangul(filepath.ToSlash(dir)),
 				Sep:    p.sep,
-				prefix: p.prefix,
+				Prefix: p.prefix,
 			}
 			if p.chord != "" {
 				s.Root = p.chord[:1]
@@ -328,7 +328,7 @@ func buildSheets(files []fileInfo) ([]*Sheet, map[string]*Sheet) {
 			byKey[key] = s
 			order = append(order, s)
 		}
-		pg := &Page{N: p.page, Name: composeHangul(base), Ext: strings.ToLower(ext), Size: f.size, Mod: f.mod, suffix: p.suffix, path: f.path}
+		pg := &Page{N: p.page, Name: composeHangul(base), Ext: strings.ToLower(ext), Size: f.size, Mod: f.mod, Suffix: p.suffix, path: f.path}
 		pg.Kind = sheetExts[pg.Ext]
 		s.Pages = append(s.Pages, pg)
 		if f.mod > s.Mod {

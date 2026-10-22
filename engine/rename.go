@@ -26,7 +26,7 @@ type Renamer struct {
 
 // newStemFor builds the new file name stem for a sheet page with the given chord ("" removes the chord).
 func newStemFor(s Sheet, chord string, p *Page) string {
-	prefix := s.prefix
+	prefix := s.Prefix
 	sep := s.Sep
 	if chord == "" {
 		sep = ""
@@ -36,7 +36,7 @@ func newStemFor(s Sheet, chord string, p *Page) string {
 			sep = "_"
 		}
 	}
-	return prefix + sep + chord + p.suffix
+	return prefix + sep + chord + p.Suffix
 }
 
 func (rn *Renamer) Assign(lib *Library, id, chord string) (string, error) {
