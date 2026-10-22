@@ -28,6 +28,14 @@
       폴더 고르기는 앱 안 탐색 화면, 썸네일/HEIC 변환은 Windows 도구로 바꾸기, `releases/latest-win.json`
 
 ### 작업 기록
+- 2026-10-22 v1.1.0 — **근본 해결: Dock 에 보이는 정식 맥 앱**. MSROAD.app 본체 = Swift 껍데기(app/shell/main.swift):
+  Dock 아이콘 · 메뉴 · 앱 창(WKWebView, Chrome 필요 없음). 엔진(지킴이)은 이 앱의 자식이라 macOS 27 '백그라운드 앱 활동'의 예외
+  ("켠 앱이 Dock 에 있음")에 해당 → 우회 없음. 1.0.2~1.0.4 의 도우미 앱 · '켜진 직후 종료 신호 무시'는 모두 없앰
+  (지킴이는 이제 종료 신호를 언제나 따르고, 앱이 사라지면 엔진도 끔). 실행기 bash(app/launcher.sh)는 삭제.
+  앱은 맥에서만 만들 수 있어서 **맥 빌드 서버**(.github/workflows/build-mac.yml → scripts/ci-mac.sh)가 빌드 · 임시 서명 · 실제 맥 시험(17개 항목)을 하고
+  결과를 `ci-results` 브랜치에 올린다(이 세션의 프록시는 Actions 화면/API 를 막아서 결과를 git 으로 받음). 1차 시험에서 1.0.4→1.1.0
+  업데이트 경로의 '끝없이 다시 열림' 버그를 잡음(NSWorkspace 가 환경 변수를 물려줌 → MSROAD_RELAUNCHED 로 막음). 좁은 창 위쪽 버튼 잘림도 수정.
+  남은 것: 사용자 맥(macOS 27)에서 확인 → 괜찮으면 SROAD · YTROAD 에 같은 구조 적용. 프록시가 브랜치 삭제를 막아서 `ci-probe` 브랜치(실행 안 됨)가 남아 있음.
 - 2026-10-22 (조사) macOS 27 의 원인 재검토 — 보안 구멍을 막은 게 아니라 새 기능 **'백그라운드 앱 활동(Background App Activity)'** 때문:
   앱을 종료한 뒤에도 창·메뉴 막대 아이콘·Dock 없이 계속 도는 프로세스를 사용자에게 보여 주고, 사용자가 앱별로 끌 수 있으며
   꺼져 있으면 시스템이 종료시킨다(설정 › 일반 › 로그인 항목 및 확장 프로그램 › 백그라운드 앱 활동). 예외: 그 프로세스를 켠 앱이 Dock 에 남아 있을 때.
@@ -71,7 +79,23 @@
 - 2026-10-22 v1.0.0 — 첫 버전. 엔진 · 화면 · 자동 업데이트 · 사용 가이드. 리눅스에서 Playwright로 화면, 코드 붙이기/되돌리기,
   여러 장 · PDF 보기, 1,500개 폴더(전체 보기 약 0.8초), 업데이트 → 다시 시작 → 되돌리기까지 확인.
 
-## 구조
+## 구조 (1.1.0~ : Dock 에 보이는 맥 앱)
+
+```
+app/shell/main.swift   MSROAD.app 본체(Swift/AppKit): Dock 아이콘 · 메뉴(편집/보기/윈도우) · WKWebView 창 · 엔진 실행/종료 ·
+                       Dock 다시 열기 · 업데이트 후 다시 열기(restart-requested 표시 → NSWorkspace) · launcher.log 기록
+app/Info.plist         LSUIElement 없음(= Dock 에 보임), NSAllowsLocalNetworking(127.0.0.1), 자동/갑작스런 종료 끔
+engine/                Go 엔진. MSROAD_SHELL=native 일 때: 쉬기(idle) 끔, 업데이트 재시작은 표시 파일만 남기고 종료
+engine/supervise.go    지킴이: 엔진을 자식으로 켜고 '고장'일 때만 다시 켬. 종료 신호는 항상 따름. 부모(앱)가 사라지면 끝
+scripts/build-mac.sh   (맥 전용) Go+Swift 빌드 → 번들 → codesign --deep -s - → zip 2개(업데이트용 · 처음 설치용)
+scripts/smoke-mac.sh   (맥 전용) 실제 실행 시험 A~H: 켜기·화면·자식 관계·다시 열기·고장 복구·⌘Q·종료 버튼·앱 강제 종료·업데이트 재실행·1.0.4 경로
+scripts/ci-mac.sh      빌드 서버 진입점: 빌드 → 시험 → ci-results 브랜치에 결과(status.json · results.txt · 스크린샷 · zip · 기록) 강제 푸시
+scripts/release.sh     ci-results 가 지금 VERSION/통과인지 확인 → releases/MSROAD-<v>.zip · latest.json · dist/MSROAD.zip
+scripts/build.sh       (1.1.0 부터 쓰지 않음 — 안내만 출력)
+```
+엔진 실행 사슬: MSROAD.app(Swift, Dock) → msroad-engine(지킴이, MSROAD_SUPERVISOR=1) → msroad-engine(엔진, MSROAD_CHILD=1). 주소 127.0.0.1:47917.
+
+### 아래는 1.0.x 시절 구조 (참고용)
 
 ```
 engine/          Go 엔진 (표준 라이브러리만). web/ 을 내장 (go:embed)
@@ -138,7 +162,15 @@ osascript 폴더 선택 창, sips 썸네일/HEIC 변환(특히 WEBP · PDF 첫 �
 - 진단 페이지 `http://127.0.0.1:47917/diag` (토큰 불필요, 읽기 전용, 토큰·악보 내용 없음). 사용자 맥은 Claude가 내장 브라우저로 직접 열어 볼 수 있다.
 - 커밋 작성자: `Nevertheless_D <NeverthelessD@users.noreply.github.com>`
 
-## 업데이트 내보내는 법 (Claude용)
+## 업데이트 내보내는 법 (Claude용, 1.1.0~)
+
+1. 수정 → `VERSION` 올리기 → 커밋 · 푸시 (app/ · engine/ · VERSION 이 바뀌면 맥 빌드 서버가 자동으로 돎, 5~10분)
+2. `git ls-remote origin ci-results` 가 바뀔 때까지 기다린 뒤 결과 확인:
+   `git fetch origin +refs/heads/ci-results:refs/remotes/origin/ci-results && git archive origin/ci-results | tar -x -C <임시폴더>`
+   → status.json(build/smoke 모두 ok), results.txt, shot-app.png 확인
+3. `scripts/release.sh --notes "바뀐 점 1" "바뀐 점 2"` → 커밋 · 푸시. 처음 설치용은 dist/MSROAD.zip.
+
+## 업데이트 내보내는 법 (1.0.x, 참고용)
 
 1. 수정 → `VERSION` 올리기 (예: 1.0.1)
 2. `scripts/build.sh --notes "바뀐 점 1" "바뀐 점 2"` (한국어, 사용자용 문구)

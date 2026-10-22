@@ -6,8 +6,10 @@ Talk to them in Korean, in plain words. Never ask them to use Terminal. It follo
 as their YTROAD and SROAD apps (bash launcher + Go engine + web UI in a Chrome `--app` window, self-update from `releases/latest.json`).
 Never mention GitHub (or the repo name) in anything the user sees.
 
-**macOS 27 (important for every script-type app):** when the app's main executable (the bash launcher) exits, macOS sends SIGTERM to
-everything that app started — `nohup`/`disown`/`setsid` don't help. So the engine is started as a separate background helper app
-(`Support/bin/MSROAD Engine.app`, launched with `open -g -j -n -a … --args --env MSROAD_X=…`) under a supervisor (`engine/supervise.go`)
-that ignores SIGTERM for the first 20 s and restarts the engine on crashes. Details and the test recipe are in PROJECT_NOTES.md (v1.0.4).
-`signal.Ignore` can't be undone with `signal.Reset` — use Notify + drain. In tests use `pkill -x`, never `pkill -f msroad-engine`.
+**Since 1.1.0 MSROAD.app is a real, visible Dock app** (Swift shell `app/shell/main.swift`, WKWebView window); the Go engine runs
+as its child only while the app is open. This follows macOS 27's "Background App Activity" rule (helpers are exempt while the app
+that launched them is in the Dock) instead of working around it — never reintroduce hidden helpers or SIGTERM-ignoring.
+The app can only be built on a Mac: pushing changes under app/, engine/ or VERSION triggers `.github/workflows/build-mac.yml`, which builds,
+ad-hoc signs, runs real-Mac smoke tests and force-pushes results to the `ci-results` branch (this session's proxy blocks the Actions API,
+so read results via git). Release with `scripts/release.sh`. Full history and the test recipe are in PROJECT_NOTES.md.
+`signal.Ignore` can't be undone with `signal.Reset`. In tests use `pkill -x`, never `pkill -f msroad-engine`.

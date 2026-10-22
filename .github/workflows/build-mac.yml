@@ -9,6 +9,7 @@ on:
       - 'VERSION'
       - 'app/**'
       - 'engine/**'
+      - 'docs/MSROAD_사용가이드.png'
       - 'scripts/build-mac.sh'
       - 'scripts/smoke-mac.sh'
       - 'scripts/ci-mac.sh'
