@@ -399,7 +399,7 @@ func (u *Updater) Restart(port int, token string) error {
 	}
 	go func() {
 		time.Sleep(300 * time.Millisecond)
-		app.shutdown()
+		app.shutdownWhy("업데이트 후 다시 시작")
 	}()
 	return nil
 }

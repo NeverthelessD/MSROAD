@@ -17,6 +17,14 @@ BIN="$SUPPORT/bin"
 BUILD="$(cat "$RES/version.txt" 2>/dev/null)"
 mkdir -p "$BIN"
 
+# 실행 기록 (문제가 생겼을 때 원인을 찾으려고 남겨요 · 설정 › 문제 기록에서 볼 수 있어요)
+LOG="$SUPPORT/launcher.log"
+log() {
+  if [ -f "$LOG" ] && [ "$(wc -c < "$LOG" 2>/dev/null || echo 0)" -gt 262144 ]; then mv -f "$LOG" "$SUPPORT/launcher.prev.log"; fi
+  printf '%s [실행기 %s] %s\n' "$(date '+%m-%d %H:%M:%S')" "$$" "$*" >> "$LOG" 2>/dev/null
+}
+log "시작 v$BUILD · $(sw_vers -productVersion 2>/dev/null) $(uname -m) · $APP${MSROAD_RESTART:+ (업데이트 후 다시 시작)}"
+
 dialog() {
   osascript -e 'on run argv' \
     -e 'display dialog (item 1 of argv) with title "MSROAD" buttons {"확인"} default button 1 with icon caution' \
@@ -28,9 +36,11 @@ open_ui() {
   local url="http://127.0.0.1:$1/?t=$2" b
   for b in "Google Chrome" "Microsoft Edge" "Brave Browser"; do
     if [ -d "/Applications/$b.app" ] || [ -d "$HOME/Applications/$b.app" ]; then
+      log "창 열기: $b (앱 창)"
       open -na "$b" --args --app="$url" --window-size=1380,900 && return
     fi
   done
+  log "창 열기: 기본 브라우저"
   open "$url"
 }
 
@@ -53,8 +63,9 @@ if [ -z "$RESTART" ] && [ -s "$SUPPORT/port" ] && [ -s "$SUPPORT/token" ]; then
   P="$(cat "$SUPPORT/port")"; T="$(cat "$SUPPORT/token")"
   R="$(ping_engine "$P" "$T")"
   case "$R" in
-    *"\"build\":\"$BUILD\""*) open_ui "$P" "$T"; exit 0 ;;
+    *"\"build\":\"$BUILD\""*) log "이미 켜져 있음 (포트 $P) → 창만 열기"; open_ui "$P" "$T"; exit 0 ;;
     *"\"ok\":true"*)
+      log "다른 버전이 켜져 있음 → 끄고 새로 시작"
       curl -fs -m 3 -X POST -H "x-token: $T" "http://127.0.0.1:$P/api/quit" >/dev/null 2>&1
       sleep 1.2 ;;
   esac
@@ -95,21 +106,24 @@ if [ -z "$RESTART" ] && [ -s "$SUPPORT/lastport" ] && [ -s "$SUPPORT/token" ]; t
   TOKEN="$(cat "$SUPPORT/token")"
   REUSED=1
 fi
+WAIT=""; { [ -n "$RESTART" ] || [ -n "$REUSED" ]; } && WAIT=1
 [ -n "$TOKEN" ] || TOKEN="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 32)"
 rm -f "$SUPPORT/port"
-# 지난번 기록은 engine.prev.out 으로 남겨 둬요 (갑자기 멈췄을 때 원인을 찾으려고)
-[ -f "$SUPPORT/engine.out" ] && mv -f "$SUPPORT/engine.out" "$SUPPORT/engine.prev.out"
 MSROAD_TOKEN="$TOKEN" MSROAD_SUPPORT="$SUPPORT" MSROAD_APP="$APP" MSROAD_PORT="$PREF_PORT" MSROAD_RESTART="$RESTART" \
-  nohup "$ENGINE" > "$SUPPORT/engine.out" 2>&1 < /dev/null &
+  MSROAD_SUPERVISOR=1 MSROAD_PORT_WAIT="$WAIT" \
+  nohup "$ENGINE" > /dev/null 2>&1 < /dev/null &
 disown
+log "엔진 지킴이 켬 (pid $!, 원하는 포트 ${PREF_PORT:-기본})"
 
 for _ in $(seq 1 75); do [ -s "$SUPPORT/port" ] && break; sleep 0.2; done
 if [ ! -s "$SUPPORT/port" ]; then
+  log "⚠️ 15초 안에 엔진이 준비되지 않음"
   dialog "😢 MSROAD를 시작하지 못했어요. 앱을 다시 실행해 보세요.
 계속 안 되면 컴퓨터를 재시동한 뒤 시도해 주세요."
   exit 1
 fi
 PORT="$(cat "$SUPPORT/port")"
+log "엔진 준비됨 (포트 $PORT)"
 
 # 4) 앱 창 열기 (다시 시작이고 같은 포트라면 열려 있던 창이 스스로 새로고침해요)
 if [ -n "$RESTART" ] && [ "$PORT" = "$PREF_PORT" ]; then
@@ -120,7 +134,7 @@ if [ -n "$REUSED" ] && [ "$PORT" = "$PREF_PORT" ]; then
   for _ in 1 2 3 4 5 6 7 8; do
     sleep 0.2
     case "$(curl -fs -m 1 -H "x-token: $TOKEN" "http://127.0.0.1:$PORT/api/attached" 2>/dev/null)" in
-      *'"visible":true'*) exit 0 ;;
+      *'"visible":true'*) log "열려 있던 창이 다시 이어짐 → 새 창은 열지 않음"; exit 0 ;;
     esac
   done
 fi

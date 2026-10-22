@@ -40,7 +40,8 @@ export async function api(path, body) {
   try { r = await fetch(path, init); } catch {
     // 잠깐 끊긴 것일 수 있어서 한 번 더 해 봐요
     await sleep(800);
-    try { r = await fetch(path, init); } catch {
+    try { r = await fetch(path, init); } catch (e2) {
+      reportClient(`연결 실패: ${init.method} ${path.split('?')[0]} (${e2?.message || e2})`);
       goOffline();
       const e = new Error('MSROAD 엔진과 연결되지 않았어요');
       e.offline = true;
@@ -49,9 +50,40 @@ export async function api(path, body) {
   }
   let j = {};
   try { j = await r.json(); } catch { /* ignore */ }
-  if (!r.ok || j.ok === false) throw new Error(j.error || `요청에 실패했어요 (${r.status})`);
+  if (!r.ok || j.ok === false) {
+    if (r.status >= 500 || r.status === 403) reportClient(`요청 오류 ${r.status}: ${init.method} ${path.split('?')[0]} ${j.error || ''}`);
+    throw new Error(j.error || `요청에 실패했어요 (${r.status})`);
+  }
+  if (clientQueue.length && path !== '/api/clientlog') flushClient();
   return j;
 }
+
+// ── 화면에서 생긴 문제를 엔진 기록에 남겨요 (진단용) ──
+const clientQueue = [];
+export function reportClient(msg) {
+  clientQueue.push(String(msg).slice(0, 500));
+  if (clientQueue.length > 40) clientQueue.shift();
+  try {
+    const keep = JSON.parse(sessionStorage.getItem('msroad-client') || '[]');
+    keep.push(String(msg).slice(0, 500));
+    sessionStorage.setItem('msroad-client', JSON.stringify(keep.slice(-40)));
+  } catch { /* 저장 못 해도 괜찮아요 */ }
+}
+let flushing = false;
+async function flushClient() {
+  if (flushing) return;
+  flushing = true;
+  const items = clientQueue.splice(0);
+  try {
+    await fetch('/api/clientlog', { method: 'POST', headers: { 'x-token': T, 'content-type': 'application/json' }, body: JSON.stringify({ items }) });
+    try { sessionStorage.removeItem('msroad-client'); } catch { /* */ }
+  } catch { clientQueue.unshift(...items); }
+  flushing = false;
+}
+// 새로 고침 전에 남겨 둔 기록도 보내요
+try { for (const x of JSON.parse(sessionStorage.getItem('msroad-client') || '[]')) clientQueue.push(x); sessionStorage.removeItem('msroad-client'); } catch { /* */ }
+window.addEventListener('error', (e) => reportClient(`화면 오류: ${e.message} @ ${(e.filename || '').split('/').pop()}:${e.lineno}`));
+window.addEventListener('unhandledrejection', (e) => { if (!e.reason?.offline) reportClient(`처리 안 된 오류: ${e.reason?.message || e.reason}`); });
 
 export const thumbURL = (s, i = 0) => `/api/thumb?id=${s.id}&p=${i}&v=${s.pages[i]?.mod || 0}&t=${T}`;
 export const fileURL = (s, i = 0) => `/api/file?id=${s.id}&p=${i}&v=${s.pages[i]?.mod || 0}&t=${T}`;
@@ -231,7 +263,22 @@ export function goOffline() {
   const tryPing = async () => {
     try {
       const r = await fetch(`/api/ping?vis=${document.visibilityState === 'visible' ? 1 : 0}`, { headers: { 'x-token': T } });
-      if (r.ok) { location.reload(); return; }
+      if (r.ok) {
+        // 엔진은 켜져 있는데 계속 끊긴다면 새로 고침을 되풀이하지 않고 멈춰요
+        let hist = [];
+        try { hist = JSON.parse(sessionStorage.getItem('msroad-reloads') || '[]').filter((t) => Date.now() - t < 60000); } catch { /* */ }
+        if (hist.length >= 3) {
+          reportClient('엔진은 응답하는데 화면 연결이 계속 끊김 (1분에 3번)');
+          await flushClient();
+          el.querySelector('h2').textContent = '연결이 자꾸 끊겨요';
+          el.querySelector('p').innerHTML = '엔진은 켜져 있는데 화면과의 연결이 계속 끊기고 있어요.<br>이 창을 닫고 <b>MSROAD를 다시 열어</b> 주세요. 기록은 남겨 두었어요.';
+          el.querySelector('.offline-wait').hidden = true;
+          return;
+        }
+        try { hist.push(Date.now()); sessionStorage.setItem('msroad-reloads', JSON.stringify(hist)); } catch { /* */ }
+        location.reload();
+        return;
+      }
     } catch { /* 아직 꺼져 있어요 */ }
     setTimeout(tryPing, 1000);
   };

@@ -86,12 +86,18 @@ func main() {
 			support = filepath.Join(home, ".msroad")
 		}
 	}
+	if env("SUPERVISOR") == "1" {
+		os.MkdirAll(support, 0o755)
+		runSupervisor(support)
+		return
+	}
 	token := env("TOKEN")
 	if token == "" {
 		token = randID(16)
 	}
 	app = &App{support: support, token: token}
 	os.MkdirAll(support, 0o755)
+	os.Rename(filepath.Join(support, "engine.log"), filepath.Join(support, "engine.prev.log"))
 	if f, err := os.OpenFile(filepath.Join(support, "engine.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
 		log.SetOutput(io.MultiWriter(os.Stderr, f))
 	}
@@ -103,27 +109,43 @@ func main() {
 	app.upd = NewUpdater(support)
 	go func() { defer recoverLog("startup scan"); app.rescan() }()
 
-	ln := listen(env("PORT"))
+	go heartbeat(support)
+	ln := listen(env("PORT"), env("PORT_WAIT") == "1")
 	app.port = ln.Addr().(*net.TCPAddr).Port
 	writeFileAtomic(filepath.Join(support, "token"), []byte(token), 0o600)
 	writeFileAtomic(filepath.Join(support, "port"), []byte(strconv.Itoa(app.port)), 0o644)
 	// lastport 는 지우지 않아요. 엔진이 꺼진 뒤 앱을 다시 열면 같은 주소로 켜져서, 열려 있던 창이 그대로 이어져요.
 	writeFileAtomic(filepath.Join(support, "lastport"), []byte(strconv.Itoa(app.port)), 0o644)
-	log.Printf("MSROAD %s listening on %d", build, app.port)
+	log.Printf("MSROAD %s listening on %d (pid %d, 지킴이 %v)", build, app.port, os.Getpid(), env("CHILD") == "1")
 
 	go app.idleWatcher()
 	go func() { defer recoverLog("autoLoop"); app.upd.autoLoop() }()
-	srv := &http.Server{Handler: hostGuard(app.routes()), ErrorLog: log.Default()}
+	srv := &http.Server{Handler: hostGuard(recordRequests(app.routes())), ErrorLog: log.Default()}
 	log.Fatal(srv.Serve(ln))
 }
 
-func listen(pref string) net.Listener {
-	if p, err := strconv.Atoi(pref); err == nil && p > 0 {
-		for i := 0; i < 20; i++ {
-			if ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p)); err == nil {
-				return ln
-			}
-			time.Sleep(150 * time.Millisecond)
+// defaultPort: 항상 같은 주소를 쓰면 엔진이 다시 켜져도 열려 있던 창이 이어지고, 진단 페이지도 찾기 쉬워요.
+// 다른 프로그램이 쓰고 있으면 빈 포트를 골라요.
+const defaultPort = 47917
+
+func listen(pref string, wait bool) net.Listener {
+	p, err := strconv.Atoi(pref)
+	if err != nil || p <= 0 {
+		p = defaultPort
+	}
+	tries := 1
+	if wait { // 다시 시작할 때는 이전 엔진이 주소를 놓을 때까지 잠깐 기다려요
+		tries = 20
+	}
+	for i := 0; i < tries; i++ {
+		if ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p)); err == nil {
+			return ln
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	if p != defaultPort {
+		if ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", defaultPort)); err == nil {
+			return ln
 		}
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -149,12 +171,16 @@ func (a *App) idleWatcher() {
 		idle := time.Since(started) - time.Duration(a.lastSeen.Load())
 		if idle > idleLimit && !a.upd.Busy() {
 			log.Printf("idle for %s, shutting down", idle.Round(time.Second))
-			a.shutdown()
+			a.shutdownWhy("오래 쉼")
 		}
 	}
 }
 
-func (a *App) shutdown() {
+func (a *App) shutdown() { a.shutdownWhy("종료") }
+
+func (a *App) shutdownWhy(why string) {
+	log.Printf("shutdown: %s", why)
+	markCleanExit(a.support, why)
 	if b, err := os.ReadFile(filepath.Join(a.support, "port")); err == nil && string(b) == strconv.Itoa(a.port) {
 		os.Remove(filepath.Join(a.support, "port"))
 	}
@@ -257,6 +283,8 @@ func (a *App) routes() http.Handler {
 		static.ServeHTTP(w, r)
 	})
 
+	mux.HandleFunc("/diag", a.handleDiag)
+
 	api := func(path string, h http.HandlerFunc) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			t := r.Header.Get("x-token")
@@ -286,7 +314,25 @@ func (a *App) routes() http.Handler {
 	})
 	api("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true})
-		go func() { time.Sleep(300 * time.Millisecond); a.shutdown() }()
+		go func() { time.Sleep(300 * time.Millisecond); a.shutdownWhy("종료 버튼") }()
+	})
+	// 화면에서 생긴 문제를 받아 적어요 (진단용)
+	api("/api/clientlog", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Items []string `json:"items"`
+		}
+		readJSON(r, &in)
+		for i, x := range in.Items {
+			if i >= 30 {
+				break
+			}
+			if len(x) > 600 {
+				x = x[:600]
+			}
+			diag.clientErr(x)
+			log.Printf("client: %s", x)
+		}
+		writeJSON(w, map[string]any{"ok": true})
 	})
 	api("/api/poll", func(w http.ResponseWriter, r *http.Request) {
 		canUndo, undoDesc := a.rn.CanUndo()
