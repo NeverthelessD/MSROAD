@@ -23,11 +23,14 @@
 - [x] 7. v1.0.0 빌드 · releases/latest.json 게시
 
 ### 다음에 할 수 있는 일
-- [ ] 실제 맥에서 확인 (아래 「맥에서만 확인되는 것」) — 사용자 피드백 받기
+- [x] 실제 맥(macOS 27)에서 1.1.0 실행 확인 (2026-10-22, 사용자)
 - [ ] Windows 버전 (사용자가 나중에 요청 예정): YTROAD의 `launcher_windows.go` 방식(하나의 .exe가 실행기 겸 엔진),
       폴더 고르기는 앱 안 탐색 화면, 썸네일/HEIC 변환은 Windows 도구로 바꾸기, `releases/latest-win.json`
 
 ### 작업 기록
+- 2026-10-22 사용자: 1.1.0 이 macOS 27 에서 잘 실행됨을 확인. 같은 Dock 앱 구조를 SROAD(1.1.0)와 YTROAD(맥 1.2.0, Apple Silicon · Intel 겸용
+  universal 껍데기)에 옮김 — 각 저장소 CLAUDE.md 참고. MSROAD 쪽 변경: release.sh 가 ci-results 를 명시적 refspec 으로 받도록 수정.
+  `[ ]` 시험용 `ci-probe` 브랜치는 사용자가 저장소 화면에서 지우기로 함(세션 권한으로는 브랜치 삭제 불가).
 - 2026-10-22 v1.1.0 — **근본 해결: Dock 에 보이는 정식 맥 앱**. MSROAD.app 본체 = Swift 껍데기(app/shell/main.swift):
   Dock 아이콘 · 메뉴 · 앱 창(WKWebView, Chrome 필요 없음). 엔진(지킴이)은 이 앱의 자식이라 macOS 27 '백그라운드 앱 활동'의 예외
   ("켠 앱이 Dock 에 있음")에 해당 → 우회 없음. 1.0.2~1.0.4 의 도우미 앱 · '켜진 직후 종료 신호 무시'는 모두 없앰
