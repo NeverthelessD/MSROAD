@@ -28,6 +28,9 @@
       폴더 고르기는 앱 안 탐색 화면, 썸네일/HEIC 변환은 Windows 도구로 바꾸기, `releases/latest-win.json`
 
 ### 작업 기록
+- 2026-10-22 SROAD v1.0.1 에도 같은 해결책(도우미 앱 + 지킴이 + launcher.log)을 적용함. SROAD 는 엔진(자식)도 켜진 직후 20초 동안 SIGTERM 을
+  받아서 버려서 다시 켜질 필요조차 없게 했다(작업 목록을 메모리에 들고 있어서). 그때 발견: `signal.Ignore` 는 `signal.Reset` 으로 안 풀린다 → Notify 후 Reset.
+  YTROAD 도 같은 실행 방식이라 macOS 27 에서 같은 문제가 날 수 있음(아직 미적용).
 - 2026-10-22 v1.0.4 — **연결 끊김 진짜 원인 확인** (사용자가 보내 준 launcher.log): 맥은 macOS 27.0.1. 실행기(MSROAD.app 의 본체)가
   Chrome 창을 열고 끝나는 순간 1초 안에 시스템이 그 앱이 켠 프로세스(지킴이·엔진)에 SIGTERM 을 보낸다 — setsid 로 세션을 바꿔도 소용없음.
   1.0.2 는 지킴이가 그걸 크래시로 보고 다시 켜서 '우연히' 됐고, 1.0.3 은 그걸 고쳐서 다시 안 됐다. (YTROAD·SROAD 도 macOS 27 에서 새로 켜면 같은 문제가 날 수 있음)
