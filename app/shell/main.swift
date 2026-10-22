@@ -222,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let env = ProcessInfo.processInfo.environment
         // 1.0.4 이하의 업데이트 기능이 이 앱을 직접 실행한 경우: macOS 정식 방법으로 다시 열고 이 실행은 끝내요
-        if env["MSROAD_RESTART"] == "1" {
+        if env["MSROAD_RESTART"] == "1" && env["MSROAD_RELAUNCHED"] != "1" {
             Log.write("예전 버전에서 업데이트됨 → 정식 방법으로 다시 열어요")
             relaunch()
             return
@@ -293,6 +293,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let cfg = NSWorkspace.OpenConfiguration()
         cfg.createsNewApplicationInstance = true
         cfg.activates = true
+        // 새로 여는 앱은 지금 앱의 환경 변수를 물려받아요. '다시 열어 줘' 표시(MSROAD_RESTART)를 빼고,
+        // 다시 연 앱이라는 표시를 붙여서 끝없이 다시 열리는 일이 없게 해요.
+        var env = ProcessInfo.processInfo.environment
+        env.removeValue(forKey: "MSROAD_RESTART")
+        env["MSROAD_RELAUNCHED"] = "1"
+        cfg.environment = env
+        unsetenv("MSROAD_RESTART")
         NSWorkspace.shared.openApplication(at: appURL, configuration: cfg) { _, error in
             if let error = error { Log.write("⚠️ 다시 열지 못했어요: \(error.localizedDescription)") }
             DispatchQueue.main.async { NSApp.terminate(nil) }

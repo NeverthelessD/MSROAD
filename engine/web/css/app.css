@@ -471,3 +471,23 @@ mark { background: color-mix(in srgb, var(--accent) 26%, transparent); color: in
 .road.fresh .lt { color: #fff; background: var(--brand); }
 .road.fresh .ct { color: #fff; background: var(--brand); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
 .road.fresh.on .lt { background: var(--text); color: var(--panel); }
+
+/* ── 창이 좁을 때 (앱 창은 1000px 까지 줄일 수 있어요) ─────────────────── */
+@media (max-width: 1280px) {
+  .app { min-width: 0; grid-template-columns: 212px 1fr; }
+  .top { grid-template-columns: 212px minmax(160px, 1fr) auto; gap: 12px; padding-right: 10px; }
+  .brand { padding-left: 14px; gap: 9px; }
+  .brand-sub, .search kbd { display: none; }
+  .top-actions { gap: 6px; }
+  .folder-btn { max-width: 150px; }
+  .refresh-btn { padding: 0 9px; }
+  .refresh-btn span { display: none; }
+  .head { padding: 18px 22px 12px; }
+  .body { padding: 6px 22px 36px; }
+  .head-row { flex-wrap: wrap; row-gap: 10px; }
+}
+@media (max-width: 1080px) {
+  .seg-icons button { width: 26px; }
+  .ver { padding: 0 9px; }
+  .folder-btn span { max-width: 90px; }
+}
