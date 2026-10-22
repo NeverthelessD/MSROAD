@@ -28,6 +28,17 @@
       폴더 고르기는 앱 안 탐색 화면, 썸네일/HEIC 변환은 Windows 도구로 바꾸기, `releases/latest-win.json`
 
 ### 작업 기록
+- 2026-10-22 v1.0.4 — **연결 끊김 진짜 원인 확인** (사용자가 보내 준 launcher.log): 맥은 macOS 27.0.1. 실행기(MSROAD.app 의 본체)가
+  Chrome 창을 열고 끝나는 순간 1초 안에 시스템이 그 앱이 켠 프로세스(지킴이·엔진)에 SIGTERM 을 보낸다 — setsid 로 세션을 바꿔도 소용없음.
+  1.0.2 는 지킴이가 그걸 크래시로 보고 다시 켜서 '우연히' 됐고, 1.0.3 은 그걸 고쳐서 다시 안 됐다. (YTROAD·SROAD 도 macOS 27 에서 새로 켜면 같은 문제가 날 수 있음)
+  고침: ① 엔진을 Support/bin/MSROAD Engine.app(LSBackgroundOnly 도우미 앱)으로 만들어 `open -g -j -n -a … --args --env MSROAD_X=…` 로 켠다
+  (LaunchServices 가 켠 별도 앱이라 MSROAD.app 이 끝나도 같이 꺼지지 않음). 엔진은 `--env` 인자를 환경 변수로 받는다.
+  ② 안전망: 지킴이는 켜진 뒤 20초(graceWindow, 테스트용 MSROAD_GRACE_SEC) 안에 오는 종료 신호를 무시하고, 그 사이 엔진이 종료 신호로 꺼지면 다시 켠다.
+  그 뒤의 종료 신호(로그아웃·종료)는 그대로 따른다. ③ 도우미 앱으로 8초 안에 안 켜지면 예전 방식(nohup)으로 켠다.
+  리눅스에서 가짜 open(별도 세션으로 실제 실행) + 모든 엔진에 SIGTERM 을 보내는 방식으로 macOS 27 동작을 흉내 내 3회 반복 확인.
+  **새 기능**(사용자 요청): 폴더마다 본 파일 목록(Support/seen/<해시>.json: 경로 + 크기|수정시각)을 저장해서, 앱을 켤 때나 다시 읽을 때 새로 들어온
+  악보를 알아본다(코드를 붙여 이름만 바뀐 건 제외). 시작할 때 "지난번 이후 새 악보 N개" 알림 + '보기' → 왼쪽 NEW 목록, 카드에 '새 악보' 표시
+  (그 실행 동안만). 위쪽 새로고침 버튼에 글자를 붙이고 결과(새 악보 N개 / 새로 들어온 악보가 없어요)를 알려 준다. 기존: 켤 때·창 포커스·60초마다 자동 다시 읽기.
 - 2026-10-22 v1.0.3 — 1.0.2 를 사용자 맥에서 열었는데 47917 진단 페이지가 안 열림. 원인: 실행기가 1.0.1 의 lastport(예전 무작위 주소)를
   다시 써서 엔진이 47917 이 아닌 곳에서 켜짐. 고침: 실행기는 토큰만 다시 쓰고 주소는 늘 47917, 엔진이 다른 주소에서 켜져도
   /diag 는 47917 에서 따로 연다. 또 지킴이가 SIGTERM(로그아웃·시스템 종료)을 받아도 엔진을 다시 켜던 버그 수정 —
@@ -106,7 +117,8 @@ osascript 폴더 선택 창, sips 썸네일/HEIC 변환(특히 WEBP · PDF 첫 �
 - 문제 기록(1.0.1): 실행기가 엔진 출력을 `engine.out`(지난번은 `engine.prev.out`)에 남기고, 엔진은 panic 을 스택과 함께
   `engine.log` 에 적는다. 다음 실행 때 '멈춘 기록이 있어요' 알림 → 설정 › 문제 기록 › 기록 복사 로 사용자가 보내 줄 수 있다.
   (Claude는 ~/Library/Application Support 를 직접 읽을 수 없음 — macOS 보호 폴더)
-- 엔진 구조(1.0.2~): 실행기 → `msroad-engine`(MSROAD_SUPERVISOR=1, 지킴이, setsid) → `msroad-engine`(MSROAD_CHILD=1, 진짜 엔진).
+- 엔진 구조(1.0.4~): 실행기 → `open` → `Support/bin/MSROAD Engine.app`(백그라운드 도우미 앱, 지킴이 MSROAD_SUPERVISOR=1) → `msroad-engine`(MSROAD_CHILD=1, 진짜 엔진).
+  macOS 27 은 앱 본체가 끝나면 그 앱이 켠 프로세스를 SIGTERM 으로 끄기 때문에 엔진은 반드시 도우미 앱으로 따로 켠다.
   지킴이는 엔진 종료 코드 0(종료 버튼·오래 쉼·업데이트 재시작)이면 함께 끝나고, 그 밖에는 기록 후 재시작한다.
   기록 파일(Support 폴더): launcher.log(실행기·지킴이) · requests.log(요청·화면 문제, 크래시 직전 포함) · engine.log/engine.prev.log
   · engine.out/engine.prev.out(Go 런타임 출력) · alive/clean-exit(지난번이 어떻게 끝났는지).

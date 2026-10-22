@@ -72,7 +72,20 @@ const idleLimit = 90 * time.Minute
 
 func env(k string) string { return os.Getenv("MSROAD_" + k) }
 
+// envArgs: 백그라운드 도우미 앱으로 켜질 때는 환경 변수를 넘길 수 없어서 `--env MSROAD_X=값` 으로 받아요.
+func envArgs() {
+	for i := 1; i+1 < len(os.Args); i++ {
+		if os.Args[i] == "--env" {
+			if k, v, ok := strings.Cut(os.Args[i+1], "="); ok && strings.HasPrefix(k, "MSROAD_") {
+				os.Setenv(k, v)
+			}
+			i++
+		}
+	}
+}
+
 func main() {
+	envArgs()
 	log.SetFlags(log.LstdFlags)
 	home, _ := os.UserHomeDir()
 	support := env("SUPPORT")
@@ -103,7 +116,7 @@ func main() {
 	}
 	app.loadSettings()
 	touch()
-	app.lib = NewLibrary()
+	app.lib = NewLibrary(support)
 	app.thumbs = NewThumbs(support)
 	app.rn = &Renamer{}
 	app.upd = NewUpdater(support)
@@ -362,7 +375,8 @@ func (a *App) routes() http.Handler {
 	})
 	api("/api/rescan", func(w http.ResponseWriter, r *http.Request) {
 		changed := a.rescan()
-		writeJSON(w, map[string]any{"ok": true, "changed": changed, "rev": a.lib.Rev()})
+		added, removed := a.lib.LastChange()
+		writeJSON(w, map[string]any{"ok": true, "changed": changed, "rev": a.lib.Rev(), "added": added, "removed": removed, "newTotal": a.lib.NewCount()})
 	})
 	api("/api/settings", a.handleSettings)
 	api("/api/folder", a.handleFolder)

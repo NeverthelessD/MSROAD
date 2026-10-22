@@ -161,7 +161,13 @@ input[type=text] { user-select: text; -webkit-user-select: text; }
 .seg-icons button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
 .icon-btn { width: 32px; height: 32px; border-radius: 10px; border: 0; background: var(--sunken); color: var(--muted); cursor: pointer; display: grid; place-items: center; flex: none; }
 .icon-btn:hover { color: var(--text); }
-.icon-btn.spin svg { animation: spin .8s linear infinite; }
+.icon-btn.spin svg, .refresh-btn.spin svg { animation: spin .8s linear infinite; }
+.refresh-btn {
+  display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 10px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line2); background: var(--raised); font-weight: 650; font-size: 12.5px; white-space: nowrap;
+}
+.refresh-btn svg { color: var(--brand); flex: none; }
+.refresh-btn:hover { background: var(--panel); }
 @keyframes spin { to { transform: rotate(360deg); } }
 #quitBtn:hover { color: var(--danger); }
 
@@ -456,3 +462,12 @@ mark { background: color-mix(in srgb, var(--accent) 26%, transparent); color: in
 .offline-wait { margin-top: 20px; display: inline-flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 650; color: var(--muted); }
 .offline-wait i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line2); border-top-color: var(--brand); animation: spin .9s linear infinite; }
 .crash { max-height: 160px; overflow: auto; margin: 0; padding: 10px; border-radius: 10px; background: var(--sunken); font: 11px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; user-select: text; -webkit-user-select: text; }
+
+/* ── 새 악보 ─────────────────────────────────── */
+.newtag { position: absolute; right: 8px; top: 8px; z-index: 2; height: 21px; padding: 0 8px; border-radius: 999px;
+  background: var(--brand); color: #fff; font-size: 10.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 4px;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--brand) 45%, transparent); }
+.newtag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #fff; }
+.road.fresh .lt { color: #fff; background: var(--brand); }
+.road.fresh .ct { color: #fff; background: var(--brand); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+.road.fresh.on .lt { background: var(--text); color: var(--panel); }

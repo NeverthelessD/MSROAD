@@ -11,6 +11,7 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -37,6 +38,7 @@ type Page struct {
 	Size   int64  `json:"size"`
 	Mod    int64  `json:"mod"`    // ms
 	Suffix string `json:"suffix"` // 원래 쪽 표시 (_1, _01 …)
+	rel    string
 	path   string
 }
 
@@ -51,6 +53,7 @@ type Sheet struct {
 	Pages  []*Page `json:"pages"`
 	Mod    int64   `json:"mod"`
 	Prefix string  `json:"prefix"` // 코드 앞 원래 글자 (구분자 제외)
+	New    bool    `json:"new"`    // 이번에 앱을 켠 뒤(또는 지난번 실행 이후) 새로 들어온 악보
 }
 
 type Library struct {
@@ -63,9 +66,70 @@ type Library struct {
 	scannedAt int64
 	scanErr   string
 	truncated bool
+
+	seenDir string          // 폴더마다 이미 본 파일 목록을 저장하는 곳
+	fresh   map[string]bool // 이번 실행에서 새로 들어온 파일 (상대 경로)
+	added   int             // 마지막으로 다시 읽었을 때 새로 들어온 악보 수
+	removed int             // 마지막으로 다시 읽었을 때 사라진 파일 수
 }
 
-func NewLibrary() *Library { return &Library{byID: map[string]*Sheet{}} }
+func NewLibrary(support string) *Library {
+	return &Library{byID: map[string]*Sheet{}, seenDir: filepath.Join(support, "seen"), fresh: map[string]bool{}}
+}
+
+// ---------------------------------------------------------------- 새 악보 알아보기
+// 폴더마다 '이미 본 파일' 목록(경로 + 크기·수정 시각)을 저장해 두고, 다음에 읽을 때 없던 파일을 '새 악보'로 표시해요.
+// 앱에서 코드를 붙여 이름만 바뀐 파일은 크기·수정 시각이 같아서 새 악보로 치지 않아요.
+
+type seenSet struct {
+	Paths []string `json:"paths"`
+	Sigs  []string `json:"sigs"`
+}
+
+func (l *Library) seenPath(root string) string {
+	return filepath.Join(l.seenDir, shortHash(root)+".json")
+}
+
+func fileSig(f fileInfo) string {
+	return strconv.FormatInt(f.size, 10) + "|" + strconv.FormatInt(f.mod, 10)
+}
+
+// updateSeen returns the relative paths that are new since last time (nil the first time a folder is read).
+func (l *Library) updateSeen(root string, files []fileInfo) (newRel []string, removed int, first bool) {
+	var old seenSet
+	b, err := os.ReadFile(l.seenPath(root))
+	first = err != nil || json.Unmarshal(b, &old) != nil
+	paths := make(map[string]bool, len(old.Paths))
+	for _, p := range old.Paths {
+		paths[p] = true
+	}
+	sigs := make(map[string]bool, len(old.Sigs))
+	for _, x := range old.Sigs {
+		sigs[x] = true
+	}
+	cur := seenSet{Paths: make([]string, 0, len(files)), Sigs: make([]string, 0, len(files))}
+	now := make(map[string]bool, len(files))
+	for _, f := range files {
+		cur.Paths = append(cur.Paths, f.rel)
+		cur.Sigs = append(cur.Sigs, fileSig(f))
+		now[f.rel] = true
+		if !first && !paths[f.rel] && !sigs[fileSig(f)] {
+			newRel = append(newRel, f.rel)
+		}
+	}
+	for p := range paths {
+		if !now[p] {
+			removed++
+		}
+	}
+	if first || len(newRel) > 0 || removed > 0 || len(old.Paths) != len(cur.Paths) {
+		os.MkdirAll(l.seenDir, 0o755)
+		if b, err := json.Marshal(cur); err == nil {
+			writeFileAtomic(l.seenPath(root), b, 0o644)
+		}
+	}
+	return newRel, removed, first
+}
 
 // ---------------------------------------------------------------- parsing
 
@@ -289,12 +353,64 @@ func (l *Library) Scan(root string, sub bool) bool {
 	defer l.mu.Unlock()
 	l.scannedAt = time.Now().UnixMilli()
 	if sig == l.sig && scanErr == l.scanErr && root == l.root {
+		l.added, l.removed = 0, 0
 		return false
+	}
+	if root != l.root {
+		l.fresh = map[string]bool{}
+	}
+	l.added, l.removed = 0, 0
+	if err == nil {
+		newRel, removed, _ := l.updateSeen(root, files)
+		for _, r := range newRel {
+			l.fresh[r] = true
+		}
+		l.removed = removed
+		l.added = countSheetsOf(newRel)
 	}
 	l.root, l.sig, l.scanErr, l.truncated = root, sig, scanErr, truncated
 	l.sheets, l.byID = buildSheets(files)
+	for _, sh := range l.sheets {
+		for _, pg := range sh.Pages {
+			if l.fresh[pg.rel] {
+				sh.New = true
+				break
+			}
+		}
+	}
 	l.rev++
 	return true
+}
+
+// countSheetsOf counts distinct sheets among new files (pages _1, _2 of the same sheet count once).
+func countSheetsOf(rels []string) int {
+	seen := map[string]bool{}
+	for _, r := range rels {
+		stem := strings.TrimSuffix(filepath.Base(r), filepath.Ext(r))
+		p := parseStem(stem)
+		seen[filepath.Dir(r)+"\x00"+composeHangul(p.prefix)+"\x00"+p.sep+"\x00"+p.chord] = true
+	}
+	return len(seen)
+}
+
+// LastChange: 마지막으로 다시 읽었을 때 새로 들어온 악보 수와 사라진 파일 수
+func (l *Library) LastChange() (int, int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.added, l.removed
+}
+
+// NewCount: 이번 실행에서 새로 들어온 악보 수 (지금 목록 기준)
+func (l *Library) NewCount() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	n := 0
+	for _, sh := range l.sheets {
+		if sh.New {
+			n++
+		}
+	}
+	return n
 }
 
 func buildSheets(files []fileInfo) ([]*Sheet, map[string]*Sheet) {
@@ -328,7 +444,7 @@ func buildSheets(files []fileInfo) ([]*Sheet, map[string]*Sheet) {
 			byKey[key] = s
 			order = append(order, s)
 		}
-		pg := &Page{N: p.page, Name: composeHangul(base), Ext: strings.ToLower(ext), Size: f.size, Mod: f.mod, Suffix: p.suffix, path: f.path}
+		pg := &Page{N: p.page, Name: composeHangul(base), Ext: strings.ToLower(ext), Size: f.size, Mod: f.mod, Suffix: p.suffix, path: f.path, rel: f.rel}
 		pg.Kind = sheetExts[pg.Ext]
 		s.Pages = append(s.Pages, pg)
 		if f.mod > s.Mod {

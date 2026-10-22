@@ -37,8 +37,10 @@ export async function loadLibrary() {
     S.bySong.get(s.song).push(s);
   }
   for (const list of S.bySong.values()) list.sort((a, b) => chordOrder(a.chord) - chordOrder(b.chord) || collator.compare(a.dir, b.dir));
+  if (S.road === 'NEW' && !S.sheets.some((x) => x.new)) S.road = 'ALL';
   render();
   viewerSync();
+  if (!toldStartup && S.lib.scannedAt) startupNew();
 }
 S.reload = loadLibrary;
 on('reload', () => loadLibrary().catch((e) => toast('⚠️ ' + esc(e.message))));
@@ -52,18 +54,31 @@ async function rescan(manual) {
   try {
     const j = await api('/api/rescan', {});
     if (j.rev !== S.lib.rev) await loadLibrary();
-    if (manual) toast(j.changed ? '폴더를 다시 읽었어요' : '바뀐 파일이 없어요');
+    if (j.added > 0) announceNew(j.added, '새 악보 {n}개를 찾았어요');
+    else if (manual) toast(j.changed ? '폴더를 다시 읽었어요 · 바뀐 내용을 반영했어요' : '새로 들어온 악보가 없어요');
   } catch (e) { if (manual) toast('⚠️ ' + esc(e.message)); }
   finally { rescanBusy = false; setTimeout(() => $('#rescanBtn').classList.remove('spin'), 300); }
 }
-$('#rescanBtn').onclick = () => rescan(true);
+$('#rescanBtn').onclick = () => (S.settings?.folder ? rescan(true) : chooseFolder());
+
+// 새 악보 알림 → '보기'를 누르면 새 악보만 모아 봐요
+function announceNew(n, msg) {
+  toast(`🎵 ${msg.replace('{n}', n)}`, { action: '보기', onAction: () => { if (S.query) clearSearch(false); S.road = 'NEW'; S.lane = ''; render(true); } });
+}
+let toldStartup = false;
+function startupNew() {
+  if (toldStartup || !S.settings?.folder) return;
+  toldStartup = true;
+  const n = S.sheets.filter((s) => s.new).length;
+  if (n) announceNew(n, '지난번 이후 새 악보 {n}개가 들어왔어요');
+}
 let focusTimer;
 window.addEventListener('focus', () => { clearTimeout(focusTimer); focusTimer = setTimeout(() => rescan(false), 600); });
 setInterval(() => { if (document.visibilityState === 'visible') rescan(false); }, 60000);
 
 // ── 집계 ──
 function counts() {
-  const road = { ALL: S.sheets.length, X: 0 }, lanes = {};
+  const road = { ALL: S.sheets.length, X: 0, NEW: S.sheets.filter((s) => s.new).length }, lanes = {};
   for (const R of ROADS) { road[R] = 0; lanes[R] = new Map(); }
   for (const s of S.sheets) {
     road[s._road]++;
@@ -85,6 +100,9 @@ function renderRail(c) {
   let h = `<button class="road all ${S.road === 'ALL' && !S.query ? 'on' : ''}" data-road="ALL">
       <span class="lt"><svg width="16" height="16" viewBox="0 0 16 16"><g fill="currentColor"><rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.6"/><rect x="9" y="1.5" width="5.5" height="5.5" rx="1.6"/><rect x="1.5" y="9" width="5.5" height="5.5" rx="1.6"/><rect x="9" y="9" width="5.5" height="5.5" rx="1.6"/></g></svg></span>
       <span class="nm">ALL<small>전체 악보</small></span><span class="ct">${c.road.ALL}</span></button>
+    ${c.road.NEW ? `<button class="road fresh ${S.road === 'NEW' && !S.query ? 'on' : ''}" data-road="NEW">
+      <span class="lt"><svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M8 1.2l1.8 4.1 4.4.4-3.3 2.9 1 4.4L8 10.7 4.1 13l1-4.4L1.8 5.7l4.4-.4z"/></svg></span>
+      <span class="nm">NEW<small>새로 들어온 악보</small></span><span class="ct">${c.road.NEW}</span></button>` : ''}
     <div class="rail-h">코드별 ROAD</div>`;
   for (const R of ROADS) {
     const on = S.road === R && !S.query;
@@ -129,7 +147,9 @@ function sectionsFor(c) {
     }
     return { secs, hitsById, total: list.length };
   }
-  if (S.road === 'ALL') {
+  if (S.road === 'NEW') {
+    secs.push({ road: 'X', label: '', items: sortList(S.sheets.filter((s) => s.new)) });
+  } else if (S.road === 'ALL') {
     for (const R of [...ROADS, CROSS]) {
       const part = sortList(S.sheets.filter((s) => s._road === R));
       if (part.length) secs.push({ road: R, label: R === CROSS ? '갈림길 · 코드 없음' : `${R} ROAD`, items: part });
@@ -153,7 +173,7 @@ function cardHTML(s, hits) {
   else if (s.dir) mt.push(`<span class="dir">${esc(s.dir)}</span>`);
   return `<div class="card r${s._road} ${multi ? 'multi' : ''}" data-id="${s.id}" tabindex="0">
     <div class="sheet"><img loading="lazy" decoding="async" alt="" src="${thumbURL(s)}" data-kind="${p0.kind}">
-      <div class="tl">${s.chord ? plate(s.chord) : ''}</div>
+      <div class="tl">${s.chord ? plate(s.chord) : ''}</div>${s.new ? '<span class="newtag">새 악보</span>' : ''}
       <div class="badges">${pdf ? '<span class="badge">PDF</span>' : ''}${multi ? `<span class="badge">${s.pages.length}장</span>` : ''}</div></div>
     <div class="cap"><b title="${esc(s.pages.map((p) => p.name).join('\n'))}">${highlight(s, hits)}</b><div class="mt">${mt.join('')}</div></div>
     ${s.chord ? '' : '<button class="assign" data-assign>코드 정하기</button>'}
@@ -174,6 +194,9 @@ function headHTML(c, total) {
     const multiKey = [...S.bySong.values()].filter((l) => new Set(l.map((s) => s.chord).filter(Boolean)).size > 1).length;
     title = `<div class="title-big"><span class="K">전체 악보</span></div>`;
     sub = `${esc(S.lib.rootName)} 폴더 · 악보 ${S.sheets.length}개, ${songs}곡${multiKey ? ` · 키가 여러 개인 곡 ${multiKey}곡` : ''}`;
+  } else if (S.road === 'NEW') {
+    title = `<div class="title-big"><span class="K">새 악보</span></div>`;
+    sub = c.road.NEW ? `지난번에 앱을 쓴 뒤 폴더에 새로 들어온 악보 ${c.road.NEW}개예요. 앱을 다시 켜면 이 표시는 사라져요.` : '';
   } else if (S.road === CROSS) {
     title = `<div class="title-big"><span class="K">갈림길</span></div>`;
     sub = c.road.X ? '파일 이름에서 코드를 찾지 못한 악보예요. 코드를 정하면 파일 이름 끝에 붙이고 알맞은 ROAD로 옮겨 드려요.' : '';

@@ -91,6 +91,36 @@ if [ ! -x "$ENGINE" ] || [ "$(cat "$BIN/build" 2>/dev/null)" != "$BUILD" ]; then
   fi
 fi
 xattr -c "$ENGINE" 2>/dev/null
+
+# 엔진을 MSROAD.app 과 따로 도는 '백그라운드 도우미 앱'으로도 준비해요.
+# macOS 27 은 앱(이 실행기)이 끝날 때 그 앱이 켠 프로그램을 함께 끄기 때문에,
+# 엔진은 macOS 의 정식 방법(open)으로 따로 켜야 계속 살아 있어요.
+HELPER="$BIN/MSROAD Engine.app"
+if [ ! -x "$HELPER/Contents/MacOS/msroad-engine" ] || [ "$(cat "$HELPER/Contents/Resources/build" 2>/dev/null)" != "$BUILD" ]; then
+  rm -rf "$HELPER.new"
+  mkdir -p "$HELPER.new/Contents/MacOS" "$HELPER.new/Contents/Resources"
+  if cat "$ENGINE" > "$HELPER.new/Contents/MacOS/msroad-engine" && chmod 755 "$HELPER.new/Contents/MacOS/msroad-engine"; then
+    cat > "$HELPER.new/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleName</key><string>MSROAD Engine</string>
+  <key>CFBundleIdentifier</key><string>com.nevertheless-d.msroad.engine</string>
+  <key>CFBundleExecutable</key><string>msroad-engine</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>$BUILD</string>
+  <key>CFBundleVersion</key><string>$BUILD</string>
+  <key>LSBackgroundOnly</key><true/>
+  <key>LSUIElement</key><true/>
+  <key>LSMinimumSystemVersion</key><string>11.0</string>
+</dict></plist>
+PLIST
+    printf '%s' "$BUILD" > "$HELPER.new/Contents/Resources/build"
+    rm -rf "$HELPER" && mv "$HELPER.new" "$HELPER"
+  fi
+  xattr -cr "$HELPER" 2>/dev/null
+fi
+
 if [ ! -x "$ENGINE" ]; then
   dialog "😢 MSROAD를 준비하지 못했어요.
 MSROAD를 응용 프로그램 폴더로 옮긴 뒤 다시 실행해 주세요."
@@ -109,13 +139,36 @@ fi
 WAIT=""; { [ -n "$RESTART" ] || [ -n "$REUSED" ]; } && WAIT=1
 [ -n "$TOKEN" ] || TOKEN="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 32)"
 rm -f "$SUPPORT/port"
-MSROAD_TOKEN="$TOKEN" MSROAD_SUPPORT="$SUPPORT" MSROAD_APP="$APP" MSROAD_PORT="$PREF_PORT" MSROAD_RESTART="$RESTART" \
-  MSROAD_SUPERVISOR=1 MSROAD_PORT_WAIT="$WAIT" \
-  nohup "$ENGINE" > /dev/null 2>&1 < /dev/null &
-disown
-log "엔진 지킴이 켬 (pid $!, 원하는 포트 ${PREF_PORT:-기본})"
 
-for _ in $(seq 1 75); do [ -s "$SUPPORT/port" ] && break; sleep 0.2; done
+wait_port() { # 0.2초 단위 횟수
+  for _ in $(seq 1 "$1"); do [ -s "$SUPPORT/port" ] && return 0; sleep 0.2; done
+  return 1
+}
+
+# ① 백그라운드 도우미 앱으로 켜기 (macOS 의 정식 방법)
+STARTED=""
+if [ -x "$HELPER/Contents/MacOS/msroad-engine" ] && [ -z "${MSROAD_NO_HELPER:-}" ]; then
+  if open -g -j -n -a "$HELPER" --args \
+      --env "MSROAD_SUPERVISOR=1" --env "MSROAD_TOKEN=$TOKEN" --env "MSROAD_SUPPORT=$SUPPORT" \
+      --env "MSROAD_APP=$APP" --env "MSROAD_PORT=$PREF_PORT" --env "MSROAD_RESTART=$RESTART" \
+      --env "MSROAD_PORT_WAIT=$WAIT" --env "MSROAD_VIA=helper" 2>>"$LOG"; then
+    log "엔진 지킴이 켬 (백그라운드 도우미 앱, 원하는 포트 ${PREF_PORT:-기본})"
+    wait_port 40 && STARTED=1 || log "⚠️ 도우미 앱으로 8초 안에 준비되지 않음 → 예전 방식으로 켜 볼게요"
+  else
+    log "⚠️ 도우미 앱을 열지 못함 → 예전 방식으로 켜 볼게요"
+  fi
+fi
+
+# ② 예전 방식 (도우미 앱이 안 될 때만)
+if [ -z "$STARTED" ]; then
+  MSROAD_TOKEN="$TOKEN" MSROAD_SUPPORT="$SUPPORT" MSROAD_APP="$APP" MSROAD_PORT="$PREF_PORT" MSROAD_RESTART="$RESTART" \
+    MSROAD_SUPERVISOR=1 MSROAD_PORT_WAIT="$WAIT" MSROAD_VIA=nohup \
+    nohup "$ENGINE" > /dev/null 2>&1 < /dev/null &
+  disown
+  log "엔진 지킴이 켬 (pid $!, 원하는 포트 ${PREF_PORT:-기본})"
+  wait_port 75
+fi
+
 if [ ! -s "$SUPPORT/port" ]; then
   log "⚠️ 15초 안에 엔진이 준비되지 않음"
   dialog "😢 MSROAD를 시작하지 못했어요. 앱을 다시 실행해 보세요.
