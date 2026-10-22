@@ -118,6 +118,17 @@ func main() {
 	writeFileAtomic(filepath.Join(support, "lastport"), []byte(strconv.Itoa(app.port)), 0o644)
 	log.Printf("MSROAD %s listening on %d (pid %d, 지킴이 %v)", build, app.port, os.Getpid(), env("CHILD") == "1")
 
+	// 다른 주소에서 켜졌더라도 진단 페이지만은 늘 47917 에서 볼 수 있게 해요
+	if app.port != defaultPort {
+		go func() {
+			defer recoverLog("diag listener")
+			if ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", defaultPort)); err == nil {
+				m := http.NewServeMux()
+				m.HandleFunc("/diag", app.handleDiag)
+				http.Serve(ln, hostGuard(m))
+			}
+		}()
+	}
 	go app.idleWatcher()
 	go func() { defer recoverLog("autoLoop"); app.upd.autoLoop() }()
 	srv := &http.Server{Handler: hostGuard(recordRequests(app.routes())), ErrorLog: log.Default()}

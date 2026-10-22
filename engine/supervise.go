@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -60,14 +61,25 @@ func runSupervisor(support string) {
 	supLog(support, "시작 · 엔진 %s · %s/%s", build, runtime.GOOS, runtime.GOARCH)
 
 	// 지킴이가 신호를 받으면 엔진에게도 전해요
-	var child *os.Process
+	// 지킴이가 '그만'(로그아웃 · 시스템 종료 · 강제 종료) 신호를 받으면 엔진도 끄고, 다시 켜지 않아요
+	var (
+		mu       sync.Mutex
+		child    *os.Process
+		stopping bool
+	)
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	go func() {
 		s := <-sig
-		supLog(support, "신호 %v 를 받아 엔진을 끕니다", s)
-		if child != nil {
-			child.Signal(s)
+		mu.Lock()
+		stopping = true
+		c := child
+		mu.Unlock()
+		supLog(support, "신호 %v 를 받아 엔진을 끄고 지킴이도 끝냅니다", s)
+		if c != nil {
+			c.Signal(syscall.SIGTERM)
+		} else {
+			os.Exit(0)
 		}
 	}()
 
@@ -99,7 +111,9 @@ func runSupervisor(support string) {
 			}
 			os.Exit(1)
 		}
+		mu.Lock()
 		child = cmd.Process
+		mu.Unlock()
 		supLog(support, "엔진 켬 (pid %d, 포트 %s)", cmd.Process.Pid, orDash(port))
 		err := cmd.Wait()
 		if f != nil {
@@ -111,6 +125,19 @@ func runSupervisor(support string) {
 			how = fmt.Sprintf("신호 %v 로 꺼짐", ws.Signal())
 		}
 		ran := time.Since(started).Round(time.Second)
+		mu.Lock()
+		stop := stopping
+		child = nil
+		mu.Unlock()
+		if stop {
+			supLog(support, "엔진을 껐어요 (%s)", how)
+			return
+		}
+		// 누군가 엔진에게만 '그만' 신호를 보낸 경우(활동 상태 보기의 종료 등)도 일부러 끈 것으로 봐요
+		if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && ws.Signaled() && (ws.Signal() == syscall.SIGTERM || ws.Signal() == syscall.SIGINT || ws.Signal() == syscall.SIGHUP) {
+			supLog(support, "엔진이 종료 신호로 꺼져서 다시 켜지 않아요 (%s)", how)
+			return
+		}
 		if err == nil && code == 0 {
 			supLog(support, "엔진이 정상적으로 끝났어요 (%s 동안 실행)", ran)
 			return

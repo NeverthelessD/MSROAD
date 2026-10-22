@@ -100,9 +100,9 @@ fi
 # 3) 엔진 켜기
 #    엔진이 쉬다가 꺼졌던 거라면 지난번과 같은 주소(포트·토큰)로 켜요.
 #    그러면 열어 두었던 MSROAD 창이 스스로 다시 이어져요.
+#    주소는 늘 47917 (엔진이 정해요), 토큰만 지난번 것을 다시 써요.
 REUSED=""
-if [ -z "$RESTART" ] && [ -s "$SUPPORT/lastport" ] && [ -s "$SUPPORT/token" ]; then
-  PREF_PORT="$(cat "$SUPPORT/lastport")"
+if [ -z "$RESTART" ] && [ -s "$SUPPORT/token" ]; then
   TOKEN="$(cat "$SUPPORT/token")"
   REUSED=1
 fi
@@ -130,7 +130,7 @@ if [ -n "$RESTART" ] && [ "$PORT" = "$PREF_PORT" ]; then
   exit 0
 fi
 # 쉬고 있던 창이 화면에 열려 있었다면 그 창이 저절로 이어지니까, 새 창은 열지 않아요
-if [ -n "$REUSED" ] && [ "$PORT" = "$PREF_PORT" ]; then
+if [ -n "$REUSED" ]; then
   for _ in 1 2 3 4 5 6 7 8; do
     sleep 0.2
     case "$(curl -fs -m 1 -H "x-token: $TOKEN" "http://127.0.0.1:$PORT/api/attached" 2>/dev/null)" in
