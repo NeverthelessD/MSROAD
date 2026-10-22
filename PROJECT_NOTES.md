@@ -18,25 +18,54 @@
 - [x] 2. 엔진: 폴더 읽기 · 파일명 → 곡/코드/쪽 해석 · 썸네일/HEIC 변환 · 코드 붙이기(파일 이름 바꾸기) · 설정
 - [x] 3. 자동 업데이트(update.go) · 실행기(launcher.sh) · Info.plist · 아이콘 · build.sh
 - [x] 4. 화면: 로드/차선 탐색, 갈림길(코드 없음) 정리, 검색, 미리보기(확대·축소·화살표·전체 화면·다른 키 바로 바꾸기), 라이트/다크, 버전 배지
-- [ ] 5. 사용 가이드 이미지 (docs/MSROAD_사용가이드.png)
-- [~] 6. 리눅스에서 Playwright로 화면 · 업데이트 흐름 테스트
-- [ ] 7. v1.0.0 빌드 · releases/latest.json 게시
+- [x] 5. 사용 가이드 이미지 (docs/MSROAD_사용가이드.png)
+- [x] 6. 리눅스에서 Playwright로 화면 · 업데이트 흐름 테스트
+- [x] 7. v1.0.0 빌드 · releases/latest.json 게시
 
-## 구조 (예정 — 참고 앱과 같은 '스크립트형 앱')
+### 다음에 할 수 있는 일
+- [ ] 실제 맥에서 확인 (아래 「맥에서만 확인되는 것」) — 사용자 피드백 받기
+- [ ] Windows 버전 (사용자가 나중에 요청 예정): YTROAD의 `launcher_windows.go` 방식(하나의 .exe가 실행기 겸 엔진),
+      폴더 고르기는 앱 안 탐색 화면, 썸네일/HEIC 변환은 Windows 도구로 바꾸기, `releases/latest-win.json`
+
+### 작업 기록
+- 2026-10-22 v1.0.0 — 첫 버전. 엔진 · 화면 · 자동 업데이트 · 사용 가이드. 리눅스에서 Playwright로 화면, 코드 붙이기/되돌리기,
+  여러 장 · PDF 보기, 1,500개 폴더(전체 보기 약 0.8초), 업데이트 → 다시 시작 → 되돌리기까지 확인.
+
+## 구조
 
 ```
-engine/        Go 엔진 (표준 라이브러리만). web/ 을 내장
-  main.go      라우트 · 설정 · 폴더 고르기(osascript) · Finder 보기
-  library.go   폴더 스캔 · 파일명 해석 · 그룹(곡 → 악보 → 쪽)
-  thumbs.go    썸네일 · HEIC/PDF 미리보기 변환 (macOS sips), 캐시
-  rename.go    코드 붙이기 / 바꾸기 (파일 이름 바꾸기 + 되돌리기)
-  update.go    자동 업데이트 (releases/latest.json)
-  web/         화면 (index.html · css · js · 글꼴 · pdf.js)
-app/           MSROAD.app 껍데기 (launcher.sh · Info.plist · 아이콘)
-scripts/       build.sh · zipapp.py · feed.py
-releases/      MSROAD-x.y.z.zip · latest.json (앱이 이걸 보고 업데이트)
-docs/          사용 가이드 이미지
+engine/          Go 엔진 (표준 라이브러리만). web/ 을 내장 (go:embed)
+  main.go        라우트 · 설정(settings.json) · 폴더 고르기(osascript) · Finder 보기/열기 · 10분 쉬면 스스로 종료
+  library.go     폴더 스캔(하위 폴더, 최대 30,000개) · 파일명 해석 parseStem · 묶기(악보 = 폴더+제목+코드, 쪽 = _1,_2)
+                 · 같은 곡 키(songKey: 공백·기호 뺀 소문자) · NFD 한글 합치기(composeHangul)
+  thumbs.go      썸네일(sips -Z 640) · HEIC → JPEG, 캐시 Support/cache/{thumb,full} (크기+수정시각 키 → 이름 바꿔도 재사용)
+                 sips 가 없으면(리눅스) 브라우저가 읽는 원본을 그대로, PDF 는 화면에서 pdf.js 로 그림
+  rename.go      코드 붙이기 / 바꾸기 / 빼기 (모든 쪽 함께, 실패하면 전부 되돌림) + 직전 1회 되돌리기
+  update.go      자동 업데이트 (SROAD 것과 같음: sha256 확인, .app 교체, Support/backup 에 이전 버전, 되돌리기)
+  proc_*.go      OS별 도우미 (windows 는 자리만)
+  parse_test.go  파일명 해석 테스트 (build.sh 가 빌드 전에 돌림)
+  web/
+    index.html · css/app.css (토큰: 7 ROAD 색 --rA~--rG, 라이트/다크)
+    js/core.js     API · 상태 S · 초성 검색 · 코드 정규화 · 모달/토스트
+    js/main.js     왼쪽 ROAD 목록 · 가운데 카드 · 검색 · 오른쪽 클릭 · 단축키 · 2.5초마다 poll, 창 포커스/60초마다 다시 읽기
+    js/viewer.js   미리보기 (확대·축소·끌기·핀치, ←→, ↑↓ 다른 키, 펼쳐 보기, 전체 화면, PDF 쪽)
+    js/picker.js   코드 정하기 팝업 (A~G · ♭/♯ · 장/단조, 직접 입력, 새 파일 이름 미리보기)
+    js/panels.js   폴더 고르기 · 설정 · 버전/업데이트 · 종료
+    vendor/pdfjs/  PDF.js 4.10.38 (+ cmaps, standard_fonts)
+app/             MSROAD.app 껍데기 (launcher.sh · Info.plist · AppIcon.svg/png/icns)
+scripts/         build.sh (darwin/arm64) · zipapp.py · feed.py · guide.py (가이드 이미지 만들기)
+releases/        MSROAD-x.y.z.zip · latest.json (앱이 이걸 보고 업데이트)
+docs/            MSROAD_사용가이드.png · guide.html (이미지 원본, 고친 뒤 scripts/guide.py)
 ```
+
+### 리눅스에서 테스트하는 법
+`cd engine && go build -o /tmp/msroad .` 후 환경 변수로 실행:
+`MSROAD_SUPPORT`(데이터 폴더) `MSROAD_TOKEN` `MSROAD_PORT` `MSROAD_TEST_CHOOSE`(가짜 폴더 고르기 결과) `MSROAD_APP`(가짜 .app 경로)
+`MSROAD_UPDATE_URL`(로컬 latest.json) `MSROAD_NO_SIPS`. 실행기는 `MSROAD_TEST_ANYARCH=1` 이면 arm64 가 아니어도 돌아가요.
+화면은 Playwright(Chromium)로. 업데이트 테스트: 리눅스 엔진을 `msroad-engine` 이름으로 넣은 가짜 MSROAD.app + HOME 을 임시 폴더로.
+
+### 맥에서만 확인되는 것
+osascript 폴더 선택 창, sips 썸네일/HEIC 변환(특히 WEBP · PDF 첫 쪽), Finder 보기, Chrome 앱 창, Gatekeeper 경고, 실제 iCloud 폴더 이름 바꾸기.
 
 ## 결정 사항
 
