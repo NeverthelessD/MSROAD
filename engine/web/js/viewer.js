@@ -162,7 +162,7 @@ function shown() {
 // 화면에 맞는 기본 크기 (높이 기준)
 function fitHeights(stage) {
   const pages = shown();
-  const W = stage.clientWidth - 44, H = stage.clientHeight - 44;
+  const W = stage.clientWidth - 44, H = stage.clientHeight - 44 - (pages.length > 1 ? 34 : 0);
   const gap = 18 * (pages.length - 1);
   const sumRatio = pages.reduce((a, p) => a + p.w / p.h, 0) || 1;
   const fit = Math.max(50, Math.min(H, (W - gap) / sumRatio));
