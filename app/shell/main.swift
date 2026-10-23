@@ -13,9 +13,13 @@
 //   3) Dock 아이콘을 누르면 창을 다시 보여 주고, 앱을 종료하면 엔진도 깔끔하게 끔
 //   4) 엔진이 끝나면 앱도 끝남 (화면의 '종료' 버튼) · 업데이트 후에는 새 버전을 다시 엶
 //   5) 모든 단계를 launcher.log 에 기록
+//   6) 편집 · 인쇄: 화면이 부탁하면 맥 인쇄 창 · PDF 저장 창을 열어요 (엔진이 만든 Support/print/*.pdf 만)
 
 import AppKit
+import ApplicationServices
 import Darwin
+import PDFKit
+import UniformTypeIdentifiers
 import WebKit
 
 // MARK: - 경로 · 기록
@@ -210,6 +214,77 @@ final class Engine {
     }
 }
 
+// MARK: - 인쇄 · PDF 저장
+
+enum Printer {
+    /// 엔진이 만든 인쇄용 PDF 인지 (Support/print 안의 .pdf 만 다뤄요)
+    static func printFile(_ path: String) -> URL? {
+        let url = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+        let dir = Paths.support.appendingPathComponent("print", isDirectory: true).standardizedFileURL.resolvingSymlinksInPath().path + "/"
+        guard url.path.hasPrefix(dir), url.pathExtension.lowercased() == "pdf",
+              FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+
+    static func operation(url: URL, paper: String?, landscape: Bool?, copies: Int, duplex: Bool, name: String) -> NSPrintOperation? {
+        guard let doc = PDFDocument(url: url) else { return nil }
+        let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
+        var land = landscape ?? false
+        if landscape == nil, let page = doc.page(at: 0) {
+            let b = page.bounds(for: .mediaBox)
+            land = b.width > b.height
+        }
+        if let p = paper { info.paperName = NSPrinter.PaperName(p == "A3" ? "iso-a3" : "iso-a4") }
+        info.orientation = land ? .landscape : .portrait
+        info.topMargin = 0; info.bottomMargin = 0; info.leftMargin = 0; info.rightMargin = 0
+        info.isHorizontallyCentered = true
+        info.isVerticallyCentered = true
+        info.dictionary()[NSPrintInfo.AttributeKey.copies] = max(1, min(99, copies))
+        if duplex {
+            let ps = PMPrintSettings(info.pmPrintSettings())
+            _ = PMSetDuplex(ps, PMDuplexMode(land ? kPMDuplexTumble : kPMDuplexNoTumble))
+            info.updateFromPMPrintSettings()
+        }
+        guard let op = doc.printOperation(for: info, scalingMode: .pageScaleToFit, autoRotate: true) else { return nil }
+        op.jobTitle = name
+        return op
+    }
+
+    /// 시험용: 인쇄 창 없이 '인쇄'를 파일로 저장해 봐요 (맥 빌드 서버의 시험에서 써요)
+    static func testPrint(_ src: String, _ out: String) -> Int32 {
+        _ = NSApplication.shared
+        guard let op = operation(url: URL(fileURLWithPath: src), paper: nil, landscape: nil, copies: 1, duplex: false, name: "test") else {
+            FileHandle.standardError.write("인쇄 준비 실패\n".data(using: .utf8)!)
+            return 2
+        }
+        let info = op.printInfo
+        info.jobDisposition = .save
+        info.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = URL(fileURLWithPath: out)
+        op.showsPrintPanel = false
+        op.showsProgressPanel = false
+        let ok = op.run()
+        return ok && FileManager.default.fileExists(atPath: out) ? 0 : 3
+    }
+}
+
+/// 화면(studio.js)에서 오는 부탁: window.webkit.messageHandlers.msroad.postMessage({type: 'print' | 'savePDF', …})
+final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
+    weak var app: AppDelegate?
+    func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage,
+                               replyHandler: @escaping (Any?, String?) -> Void) {
+        guard message.frameInfo.securityOrigin.host == "127.0.0.1",
+              let body = message.body as? [String: Any], let type = body["type"] as? String, let app = app else {
+            replyHandler(nil, "허용되지 않은 요청이에요")
+            return
+        }
+        switch type {
+        case "print": app.printPDF(body, reply: replyHandler)
+        case "savePDF": app.savePDF(body, reply: replyHandler)
+        default: replyHandler(nil, "알 수 없는 요청이에요")
+        }
+    }
+}
+
 // MARK: - 앱
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, NSWindowDelegate {
@@ -332,6 +407,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let cfg = WKWebViewConfiguration()
         cfg.applicationNameForUserAgent = "MSROADShell/\(engine.build)"
         if #available(macOS 12.3, *) { cfg.preferences.isElementFullscreenEnabled = true }
+        let bridge = Bridge()
+        bridge.app = self
+        cfg.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: "msroad")
         web = WKWebView(frame: NSRect(x: 0, y: 0, width: 1380, height: 900), configuration: cfg)
         web.navigationDelegate = self
         web.uiDelegate = self
@@ -384,6 +462,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     @objc func reloadPage() {
         if let u = pageURL { web.load(URLRequest(url: u)) }
+    }
+
+    // MARK: 인쇄 · PDF 저장
+
+    func printPDF(_ b: [String: Any], reply: @escaping (Any?, String?) -> Void) {
+        guard let path = b["path"] as? String, let url = Printer.printFile(path) else {
+            reply(["error": "인쇄할 파일을 찾지 못했어요"], nil)
+            return
+        }
+        let name = (b["name"] as? String) ?? "MSROAD"
+        guard let op = Printer.operation(url: url, paper: b["paper"] as? String, landscape: b["landscape"] as? Bool,
+                                         copies: (b["copies"] as? Int) ?? 1, duplex: (b["duplex"] as? Bool) ?? false, name: name) else {
+            reply(["error": "인쇄를 준비하지 못했어요"], nil)
+            return
+        }
+        op.showsPrintPanel = true
+        op.showsProgressPanel = true
+        Log.write("인쇄 창 열기: \(url.lastPathComponent)")
+        showMain()
+        op.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+        reply(["ok": true], nil)
+    }
+
+    func savePDF(_ b: [String: Any], reply: @escaping (Any?, String?) -> Void) {
+        guard let path = b["path"] as? String, let src = Printer.printFile(path) else {
+            reply(["error": "저장할 파일을 찾지 못했어요"], nil)
+            return
+        }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [UTType.pdf]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = (b["name"] as? String) ?? src.lastPathComponent
+        panel.message = "PDF를 저장할 곳을 골라 주세요"
+        showMain()
+        panel.beginSheetModal(for: window) { r in
+            guard r == .OK, let dest = panel.url else { reply(["canceled": true], nil); return }
+            do {
+                let fm = FileManager.default
+                if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
+                try fm.copyItem(at: src, to: dest)
+                Log.write("PDF 저장: \(dest.path)")
+                reply(["dest": dest.path], nil)
+            } catch {
+                reply(["error": "PDF를 저장하지 못했어요: \(error.localizedDescription)"], nil)
+            }
+        }
     }
 
     // MARK: WKWebView
@@ -509,6 +633,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 }
 
 // MARK: - 시작
+
+// 시험용: MSROAD --test-print <인쇄용 PDF> <저장할 곳>
+if let i = CommandLine.arguments.firstIndex(of: "--test-print"), CommandLine.arguments.count > i + 2 {
+    exit(Printer.testPrint(CommandLine.arguments[i + 1], CommandLine.arguments[i + 2]))
+}
 
 let app = NSApplication.shared
 let delegate = AppDelegate()

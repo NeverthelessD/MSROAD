@@ -7,6 +7,7 @@ import {
 import { openViewer, viewerOpen, viewerSync, renderPdfThumb } from './viewer.js';
 import { openPicker, closePicker, pickerOpen } from './picker.js';
 import { openSettings, openUpdate, renderVersion, quitApp, chooseFolder } from './panels.js';
+import { studioActive } from './studio.js';
 
 const collator = new Intl.Collator('ko', { numeric: true, sensitivity: 'base' });
 
@@ -40,6 +41,7 @@ export async function loadLibrary() {
   if (S.road === 'NEW' && !S.sheets.some((x) => x.new)) S.road = 'ALL';
   render();
   viewerSync();
+  emit('library');
   if (!toldStartup && S.lib.scannedAt) startupNew();
 }
 S.reload = loadLibrary;
@@ -370,7 +372,7 @@ $('#quitBtn').onclick = quitApp;
 
 // ── 단축키 ──
 document.addEventListener('keydown', (e) => {
-  if (viewerOpen() || modalOpen() || pickerOpen()) return;
+  if (viewerOpen() || modalOpen() || pickerOpen() || studioActive()) return;
   const typing = e.target.matches?.('input, textarea');
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); q.focus(); q.select(); return; }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); chooseFolder(); return; }

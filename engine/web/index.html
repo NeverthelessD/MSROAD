@@ -6,6 +6,7 @@
 <title>MSROAD</title>
 <link rel="icon" href="/icon.png">
 <link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/studio.css">
 </head>
 <body>
 <div class="app" id="app">
@@ -26,6 +27,11 @@
       </div>
     </div>
 
+    <div class="mode-seg" id="modeSeg" role="tablist" aria-label="화면 고르기">
+      <button role="tab" data-mode="view" class="on" aria-selected="true">악보 보기</button>
+      <button role="tab" data-mode="edit" aria-selected="false">편집 · 인쇄</button>
+    </div>
+
     <label class="search" id="searchBox">
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       <input id="q" type="text" placeholder="곡 이름, 초성(ㄱㅈ), 코드(Ab · F#m)로 찾기" autocomplete="off" spellcheck="false">
@@ -33,7 +39,10 @@
       <kbd>⌘F</kbd>
     </label>
 
+    <div class="st-top" id="stTop"></div>
+
     <div class="top-actions">
+      <div class="st-actions" id="stActions"></div>
       <button class="folder-btn" id="folderBtn" title="악보 폴더 바꾸기">
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4.2c0-.9.7-1.6 1.6-1.6h3l1.5 1.6h5.3c.9 0 1.6.7 1.6 1.6v6.1c0 .9-.7 1.6-1.6 1.6H3.1c-.9 0-1.6-.7-1.6-1.6z" fill="currentColor"/></svg>
         <span id="folderName">폴더 고르기</span>
@@ -52,6 +61,7 @@
 
   <nav class="rail" id="rail"></nav>
   <main class="main" id="main"></main>
+  <section class="studio" id="studio" hidden></section>
   <div class="banner" id="banner" hidden></div>
   <footer class="foot">made by. Nevertheless_D</footer>
 </div>

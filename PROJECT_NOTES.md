@@ -24,10 +24,17 @@
 
 ### 다음에 할 수 있는 일
 - [x] 실제 맥(macOS 27)에서 1.1.0 실행 확인 (2026-10-22, 사용자)
+- [ ] 1.2.0 편집 · 인쇄를 사용자 맥에서 확인 (실제 프린터 인쇄 · A3 · 양면)
 - [ ] Windows 버전 (사용자가 나중에 요청 예정): YTROAD의 `launcher_windows.go` 방식(하나의 .exe가 실행기 겸 엔진),
       폴더 고르기는 앱 안 탐색 화면, 썸네일/HEIC 변환은 Windows 도구로 바꾸기, `releases/latest-win.json`
 
 ### 작업 기록
+- 2026-10-23 v1.2.0 — **편집 · 인쇄** (사용자 요청 · 디자인 시안 확정 뒤 제작). 위쪽 '악보 보기 | 편집 · 인쇄' 전환.
+  용지 A4/A3 · 세로/가로 · 여백(5/10/15mm) · 틀(1곡 · 2곡 나란히 · 3곡 나란히 · 자유 배치), 왼쪽 목록에서 끌어 놓기/두 번 누르기,
+  칸끼리 자리 바꾸기, 칸에 맞추기/칸 채우기/직접 조절(확대 · 축소 막대, 트랙패드 핀치, 끌어서 위치), 자르기(빈 여백 자동 포함),
+  다른 키로 바꾸기, 곡 제목 · 페이지 번호 · 칸 사이 구분선, 미리보기(매수 · 전체/지금 쪽 · 양면 · 파일 이름), 인쇄(맥 인쇄 창), PDF 저장(저장 창),
+  세트(자동 저장 · 열기 · 복제 · 이름 바꾸기 · 지우기 · 바로 인쇄), 자주 쓰는 틀(프리셋), ⌘Z/⇧⌘Z. 원본 악보 파일은 바꾸지 않음.
+  리눅스 Playwright 로 전 과정 + PDF 결과(pdftoppm 렌더, EXIF 회전 · PDF 악보 · 자르기 · 확대) 확인. 인쇄 창 · 저장 창은 맥 빌드 서버(--test-print)로 확인.
 - 2026-10-22 사용자: 1.1.0 이 macOS 27 에서 잘 실행됨을 확인. 같은 Dock 앱 구조를 SROAD(1.1.0)와 YTROAD(맥 1.2.0, Apple Silicon · Intel 겸용
   universal 껍데기)에 옮김 — 각 저장소 CLAUDE.md 참고.
   릴리스 완료: SROAD v1.1.0(실제 맥 시험 19/19), YTROAD 맥 v1.2.0(21/21, Rosetta 로 Intel 도 확인). GitHub Actions 장애로 맥 기계가
@@ -97,6 +104,12 @@ scripts/smoke-mac.sh   (맥 전용) 실제 실행 시험 A~H: 켜기·화면·�
 scripts/ci-mac.sh      빌드 서버 진입점: 빌드 → 시험 → ci-results 브랜치에 결과(status.json · results.txt · 스크린샷 · zip · 기록) 강제 푸시
 scripts/release.sh     ci-results 가 지금 VERSION/통과인지 확인 → releases/MSROAD-<v>.zip · latest.json · dist/MSROAD.zip
 scripts/build.sh       (1.1.0 부터 쓰지 않음 — 안내만 출력)
+engine/pdfout.go       (1.2.0) 배치 → PDF: JPEG 은 그대로(DCTDecode) · PNG/GIF 무손실(Flate, 투명도 SMask) · EXIF 회전 · clip(자르기/칸 밖 가림) · 같은 그림은 한 번만
+engine/sets.go         (1.2.0) 세트 Support/sets/<id>.json · 프리셋 _presets.json · /api/print/pdf → Support/print/<시각>/<이름>.pdf(최근 12개만)
+                       · 껍데기 없을 때 대신: /api/print/open(미리보기 앱) · /api/print/save(osascript 저장 위치, 시험은 MSROAD_TEST_SAVE_DIR)
+engine/web/js/studio.js (1.2.0) 편집 화면 전체. 모양 계산(mm): slotsOf/placeIn/placeFree. PDF 악보 쪽 · 곡 제목 · 쪽 번호는 화면이 300dpi 그림으로 그려 보냄
+app/shell/main.swift   (1.2.0) Bridge(WKScriptMessageHandlerWithReply 'msroad'): print → NSPrintOperation(PDFKit, A3/A4 · 방향 · 매수 · 양면),
+                       savePDF → NSSavePanel. Support/print 안의 .pdf 만 받음. `MSROAD --test-print <pdf> <out>` 은 시험용(창 없이 파일로 인쇄)
 ```
 엔진 실행 사슬: MSROAD.app(Swift, Dock) → msroad-engine(지킴이, MSROAD_SUPERVISOR=1) → msroad-engine(엔진, MSROAD_CHILD=1). 주소 127.0.0.1:47917.
 
@@ -166,6 +179,12 @@ osascript 폴더 선택 창, sips 썸네일/HEIC 변환(특히 WEBP · PDF 첫 �
   · engine.out/engine.prev.out(Go 런타임 출력) · alive/clean-exit(지난번이 어떻게 끝났는지).
 - 진단 페이지 `http://127.0.0.1:47917/diag` (토큰 불필요, 읽기 전용, 토큰·악보 내용 없음). 사용자 맥은 Claude가 내장 브라우저로 직접 열어 볼 수 있다.
 - 커밋 작성자: `Nevertheless_D <NeverthelessD@users.noreply.github.com>`
+
+- 편집 · 인쇄 디자인(2026-10-23 확정, 시안: Design 캔버스 'MSROAD 악보 편집 · 인쇄 시안'): 기존 MSROAD 색(보라 #6c5cff, ROAD 일곱 색) ·
+  Pretendard 본문 + Unbounded 로고/문구. 편집 화면 = 왼쪽 악보 목록 · 가운데 페이지(위 도구: 용지/방향/틀/여백, 아래 페이지 줄, 오른쪽 아래 확대 버튼)
+  · 오른쪽 '고른 악보' 설정. 자르기는 어두운 화면, 세트 목록 · 틀 고르기 · 미리보기는 별도 화면. 기본 틀 A3 가로 · 2곡 나란히(곡마다 A4 그대로).
+  칸 사이 6mm, 곡 제목 자리 8mm(글자 4.2mm), 쪽 번호 3.2mm. 세트 id 는 [a-z0-9]{6,40}.
+- 세트 안의 악보는 (id, 파일 번호, PDF 쪽) + 제목 · 코드 · 폴더 · song 을 함께 저장 → 코드를 바꿔 id 가 바뀌어도 같은 곡 · 코드 · 폴더로 다시 찾음.
 
 ## 업데이트 내보내는 법 (Claude용, 1.1.0~)
 

@@ -19,7 +19,7 @@ function pdfjs() {
   return pdfjsP;
 }
 const docCache = new Map();
-function loadDoc(url) {
+export function loadDoc(url) {
   if (!docCache.has(url)) {
     if (docCache.size > 12) { const [k, d] = docCache.entries().next().value; docCache.delete(k); d.then((x) => x.destroy()).catch(() => {}); }
     docCache.set(url, pdfjs().then((m) => m.getDocument({ url, cMapUrl: '/vendor/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/vendor/pdfjs/standard_fonts/', isEvalSupported: false }).promise));

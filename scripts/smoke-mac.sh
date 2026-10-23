@@ -57,6 +57,30 @@ kill -SEGV "$CHILD" 2>/dev/null; sleep 4
 check "C1 엔진 다시 켜짐" ping_ok
 check "C2 앱은 그대로" test "$(app_pid)" = "$APID"
 
+echo "▶ P. 편집 · 인쇄 (세트 저장 · PDF 만들기 · 인쇄)"
+API="http://127.0.0.1:$(port)"
+SID=$(curl -fs -H "x-token: $(tok)" "$API/api/library" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['sheets'][0]['id'])")
+python3 - "$SID" > "$OUT/spec.json" <<'SPEC'
+import json, sys
+sid = sys.argv[1]
+print(json.dumps({"name": "시험 세트", "w": 420, "h": 297, "pages": [
+  {"ops": [{"type": "image", "id": sid, "p": 0, "box": [10, 10, 197, 277], "clip": [10, 10, 197, 200]},
+           {"type": "image", "id": sid, "p": 0, "box": [213, 10, 197, 277]},
+           {"type": "line", "line": [210, 10, 210, 287], "width": 0.3, "gray": 0.6}]},
+  {"ops": [{"type": "image", "id": sid, "p": 0, "box": [100, 20, 200, 200]}]}]}))
+SPEC
+RESP=$(curl -fs -X POST -H "x-token: $(tok)" -H 'content-type: application/json' --data @"$OUT/spec.json" "$API/api/print/pdf")
+PDF=$(echo "$RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('path',''))" 2>/dev/null)
+echo "$RESP" | head -c 300; echo
+check "P1 배치를 PDF로 만듦" test -n "$PDF" -a "$(head -c 5 "$PDF" 2>/dev/null)" = "%PDF-"
+[ -n "$PDF" ] && cp "$PDF" "$OUT/made.pdf"
+"$APPDIR/Contents/MacOS/MSROAD" --test-print "$PDF" "$OUT/printed.pdf" > "$OUT/test-print.log" 2>&1; PRC=$?
+check "P2 맥 인쇄 기능으로 인쇄됨 (파일로 인쇄, 코드 $PRC)" test "$PRC" = "0" -a -s "$OUT/printed.pdf"
+curl -fs -X POST -H "x-token: $(tok)" -H 'content-type: application/json' --data '{"set":{"v":1,"id":"smoketest01","name":"시험 세트","paper":"A3","orient":"landscape","margin":10,"frame":2,"pages":[{"items":[]}]}}' "$API/api/sets/save" > /dev/null
+check "P3 세트를 저장하고 다시 읽음" bash -c "curl -fs -H 'x-token: $(tok)' '$API/api/sets' | grep -q smoketest01"
+sleep 1
+check "P4 인쇄 시험 뒤에도 앱은 1개" test "$(pgrep -x MSROAD | wc -l | tr -d ' ')" = "1"
+
 echo "▶ D. 앱 종료(⌘Q) → 엔진까지 모두 꺼짐"
 osascript -e 'tell application "MSROAD" to quit' >/dev/null 2>&1
 check "D1 앱·엔진 모두 꺼짐" wait_gone

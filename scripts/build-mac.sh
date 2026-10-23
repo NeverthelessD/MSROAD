@@ -20,7 +20,7 @@ echo "▶ 앱 껍데기 빌드 (Swift)"
 xcrun swiftc --version
 xcrun swiftc -O -target arm64-apple-macos12.0 \
   -o "$APP/Contents/MacOS/MSROAD" "$ROOT/app/shell/main.swift" \
-  -framework AppKit -framework WebKit
+  -framework AppKit -framework WebKit -framework PDFKit
 chmod 755 "$APP/Contents/MacOS/MSROAD"
 
 sed "s/__VERSION__/$VERSION/g" "$ROOT/app/Info.plist" > "$APP/Contents/Info.plist"
