@@ -346,3 +346,17 @@ body.mode-edit .seg-icons { display: none; }
   .fr-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pv-side, .cr-side { width: 260px; }
 }
+
+/* ── 화면 안 폴더 고르기 (Windows) ───────── */
+.fp { display: flex; flex-direction: column; gap: 10px; }
+.fp-hint { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.fp-places { display: flex; flex-wrap: wrap; gap: 6px; }
+.fp-places .chip { height: 30px; font-size: 12px; }
+.fp-bar { display: flex; align-items: center; gap: 8px; }
+.fp-bar .btn { height: 32px; flex: none; }
+.fp-path { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-list { height: 300px; overflow-y: auto; border: 1px solid var(--line2); border-radius: 12px; background: var(--panel); padding: 4px; display: flex; flex-direction: column; }
+.fp-item { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: none; cursor: pointer; text-align: left; font-size: 13px; }
+.fp-item:hover { background: var(--hover); }
+.fp-empty { margin: auto; color: var(--muted); font-size: 12.5px; }
+.fp-foot { display: flex; align-items: center; gap: 8px; }

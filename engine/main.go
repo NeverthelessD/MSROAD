@@ -86,6 +86,11 @@ func envArgs() {
 }
 
 func main() {
+	// Windows: MSROAD.exe 하나가 실행기와 엔진을 겸해요 (더블클릭 → 실행기, --engine → 엔진)
+	if launcherMode() {
+		runLauncher()
+		return
+	}
 	envArgs()
 	log.SetFlags(log.LstdFlags)
 	home, _ := os.UserHomeDir()
@@ -282,6 +287,7 @@ func (a *App) settingsJSON() map[string]any {
 		"home":       home,
 		"build":      build,
 		"platform":   runtime.GOOS + "/" + runtime.GOARCH,
+		"os":         uiOS(),
 	}
 }
 
@@ -426,6 +432,9 @@ func (a *App) routes() http.Handler {
 	api("/api/print/open", a.handlePrintOpen)
 	api("/api/print/save", a.handlePrintSave)
 	api("/api/reveal-file", a.handleRevealFile)
+	api("/api/print/file", a.handlePrintFile)
+	api("/api/fs/list", a.handleFsList)
+	api("/api/fs/mkdir", a.handleFsMkdir)
 	api("/api/undo", func(w http.ResponseWriter, r *http.Request) {
 		if err := a.rn.Undo(); err != nil {
 			jsonError(w, 400, err.Error())
@@ -649,20 +658,19 @@ func (a *App) filesOf(r *http.Request) []string {
 
 func (a *App) handleReveal(w http.ResponseWriter, r *http.Request) {
 	paths := a.filesOf(r)
-	if runtime.GOOS == "darwin" && len(paths) > 0 {
+	if len(paths) > 0 {
 		if dirExists(paths[0]) {
-			exec.Command("/usr/bin/open", paths[0]).Start()
+			openPaths(paths[:1])
 		} else {
-			exec.Command("/usr/bin/open", append([]string{"-R"}, paths...)...).Start()
+			revealPaths(paths)
 		}
 	}
 	writeJSON(w, map[string]any{"ok": true})
 }
 
 func (a *App) handleOpenFile(w http.ResponseWriter, r *http.Request) {
-	paths := a.filesOf(r)
-	if runtime.GOOS == "darwin" && len(paths) > 0 {
-		exec.Command("/usr/bin/open", paths...).Start()
+	if paths := a.filesOf(r); len(paths) > 0 {
+		openPaths(paths)
 	}
 	writeJSON(w, map[string]any{"ok": true})
 }

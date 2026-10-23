@@ -1,14 +1,19 @@
 // MSROAD — 폴더 고르기, 설정, 버전 · 업데이트
 // made by. Nevertheless_D
-import { S, $, esc, api, emit, toast, openModal, closeModal, confirmBox, shortPath, sleep, ROADS, logoSVG } from './core.js';
+import { S, $, esc, api, emit, toast, openModal, closeModal, confirmBox, shortPath, sleep, ROADS, logoSVG, L } from './core.js';
 
 // ── 폴더 ──
 export async function chooseFolder(path) {
   try {
     if (!path) {
-      const j = await api('/api/choose-folder', { start: S.settings?.folder || '', prompt: '악보가 들어 있는 폴더를 골라 주세요' });
-      if (!j.path) return;
-      path = j.path;
+      if (L.win) {
+        path = await pickFolder({ title: '악보 폴더 고르기', hint: '악보가 들어 있는 폴더로 들어간 뒤 아래 버튼을 눌러요. 하위 폴더까지 함께 읽어요.', start: S.settings?.folder || '', ok: '이 폴더의 악보 보기' });
+        if (!path) return;
+      } else {
+        const j = await api('/api/choose-folder', { start: S.settings?.folder || '', prompt: '악보가 들어 있는 폴더를 골라 주세요' });
+        if (!j.path) return;
+        path = j.path;
+      }
     }
     const st = await api('/api/folder', { path });
     S.settings = { ...S.settings, ...st };
@@ -18,6 +23,42 @@ export async function chooseFolder(path) {
     closeModal();
     toast(`📁 ${esc(S.lib.rootName)} 폴더에서 악보 ${S.sheets.length}개를 찾았어요`);
   } catch (e) { toast('⚠️ ' + esc(e.message), { ms: 6000 }); }
+}
+
+// ── 화면 안에서 폴더 고르기 (Windows) ──
+export function pickFolder({ title, hint = '', start = '', ok = '이 폴더 고르기' }) {
+  return new Promise((resolve) => {
+    const body = document.createElement('div');
+    body.className = 'fp';
+    let cur = null, done = false;
+    const finish = (v) => { if (done) return; done = true; closeModal(); resolve(v); };
+    const draw = (j) => {
+      cur = j;
+      body.innerHTML = `${hint ? `<div class="fp-hint">${esc(hint)}</div>` : ''}
+        <div class="fp-places">${[...j.places, ...j.drives].map((p) => `<button class="chip txt" data-go="${esc(p.path)}">${p.icon || '📁'} ${esc(p.name)}</button>`).join('')}</div>
+        <div class="fp-bar"><button class="btn" data-up ${j.parent ? '' : 'disabled'} title="위 폴더로">↑ 위로</button><span class="fp-path" title="${esc(j.path)}">📂 ${esc(j.path.length > 64 ? '…' + j.path.slice(-63) : j.path)}</span></div>
+        <div class="fp-list">${j.dirs.length ? j.dirs.map((d) => `<button class="fp-item" data-go="${esc(d.path)}"><span>📁</span>${esc(d.name)}</button>`).join('') : `<div class="fp-empty">${j.readable ? '하위 폴더가 없어요' : '이 폴더는 열 수 없어요'}</div>`}</div>
+        <div class="fp-foot"><button class="btn ghost" data-mk>+ 새 폴더</button><span class="spacer"></span><button class="btn ghost" data-cancel>취소</button><button class="btn go" data-ok>${esc(ok)}</button></div>`;
+      body.querySelector('.fp-list').scrollTop = 0;
+    };
+    const go = async (path) => {
+      try { draw(await api('/api/fs/list', { path })); } catch (e) { toast('⚠️ ' + esc(e.message)); }
+    };
+    body.addEventListener('click', async (e) => {
+      const g = e.target.closest('[data-go]');
+      if (g) return go(g.dataset.go);
+      if (e.target.closest('[data-up]') && cur?.parent) return go(cur.parent);
+      if (e.target.closest('[data-cancel]')) return finish(null);
+      if (e.target.closest('[data-ok]') && cur) return finish(cur.path);
+      if (e.target.closest('[data-mk]') && cur) {
+        const name = prompt('새 폴더 이름', '새 폴더');
+        if (!name) return;
+        try { const j = await api('/api/fs/mkdir', { path: cur.path, name }); go(j.path); } catch (err) { toast('⚠️ ' + esc(err.message)); }
+      }
+    });
+    openModal(title, body, { onClose: () => { if (!done) { done = true; resolve(null); } } });
+    go(start);
+  });
 }
 
 // ── 버전 배지 · 배너 ──
@@ -142,7 +183,7 @@ export function openSettings(focus) {
     body.innerHTML = `
       <div class="box"><h4>화면 모드</h4>
         <div class="seg" data-s="theme">${[['system', '시스템 설정 따르기'], ['light', '라이트'], ['dark', '다크']].map(([v, l]) => `<button data-v="${v}" style="flex:1" class="${(st.appearance || 'system') === v ? 'on' : ''}">${l}</button>`).join('')}</div>
-        <div class="note">‘시스템 설정 따르기’를 고르면 macOS의 라이트 · 다크 모드를 그대로 따라가요.</div></div>
+        <div class="note">‘시스템 설정 따르기’를 고르면 ${L.os}의 라이트 · 다크 모드를 그대로 따라가요.</div></div>
       <div class="box"><h4>악보 폴더</h4>
         ${folder ? `<div class="folder"><div class="fi">📁</div><div class="ft"><b>${esc(S.lib.rootName || '')}</b><span>${esc(shortPath(folder))}</span></div><button class="mini" data-s="reveal">Finder</button><button class="mini" data-s="folder">바꾸기</button></div>`
           : '<button class="btn go" data-s="folder">악보 폴더 고르기</button>'}

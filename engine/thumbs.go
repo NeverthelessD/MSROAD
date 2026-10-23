@@ -67,8 +67,18 @@ func (t *Thumbs) make(kind string, p *Page) (string, error) {
 		os.Chtimes(out, now, now)
 		return out, nil
 	}
+	goMade := false
 	if !t.hasSips {
-		return "", errors.New("no converter")
+		// sips 가 없으면(Windows) JPEG · PNG · GIF 작은 미리보기만 Go 로 만들어요. 나머지는 원본을 그대로 보여 줘요.
+		switch p.Ext {
+		case ".jpg", ".jpeg", ".png", ".gif":
+			if kind != "thumb" {
+				return "", errors.New("no converter")
+			}
+			goMade = true
+		default:
+			return "", errors.New("no converter")
+		}
 	}
 	// 같은 파일을 동시에 두 번 만들지 않게
 	t.mu.Lock()
@@ -94,6 +104,16 @@ func (t *Thumbs) make(kind string, p *Page) (string, error) {
 	t.sem <- struct{}{}
 	defer func() { <-t.sem }()
 	tmp := out + ".part.jpg"
+	if goMade {
+		if err := goThumb(p.path, tmp, thumbSize); err != nil {
+			os.Remove(tmp)
+			return "", err
+		}
+		if err := os.Rename(tmp, out); err != nil {
+			return "", err
+		}
+		return out, nil
+	}
 	args := []string{"-s", "format", "jpeg"}
 	if kind == "thumb" {
 		args = append(args, "-s", "formatOptions", "78", "-Z", strconv.Itoa(thumbSize))

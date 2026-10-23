@@ -1,7 +1,7 @@
 // MSROAD — 미리보기
 // 확대 · 축소, 화살표로 넘기기, 전체 화면, 같은 곡의 다른 키로 바로 바꾸기, 여러 장 펼쳐 보기
 // made by. Nevertheless_D
-import { S, $, esc, api, clamp, fileURL, thumbURL, plate, roadOf, versionsOf, toast } from './core.js';
+import { S, $, esc, api, clamp, fileURL, thumbURL, plate, roadOf, versionsOf, toast, L } from './core.js';
 import { openPicker, closePicker } from './picker.js';
 
 let V = null; // 지금 열린 미리보기 상태
@@ -262,7 +262,7 @@ function drawBar() {
       <button class="vbtn" data-v="width" title="폭에 맞추기 (W)">폭</button>
     </div>
     <button class="vbtn" data-vassign title="${s.chord ? '코드 바꾸기 (C)' : '코드 정하기 (C)'}" style="border:1px solid var(--line2)">${s.chord ? '코드 바꾸기' : '코드 정하기'}</button>
-    <button class="vbtn" data-v="reveal" title="Finder에서 보기"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M1.5 4.2c0-.9.7-1.6 1.6-1.6h3l1.5 1.6h5.3c.9 0 1.6.7 1.6 1.6v6.1c0 .9-.7 1.6-1.6 1.6H3.1c-.9 0-1.6-.7-1.6-1.6z" fill="currentColor"/></svg></button>
+    <button class="vbtn" data-v="reveal" title="${L.fm}에서 보기"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M1.5 4.2c0-.9.7-1.6 1.6-1.6h3l1.5 1.6h5.3c.9 0 1.6.7 1.6 1.6v6.1c0 .9-.7 1.6-1.6 1.6H3.1c-.9 0-1.6-.7-1.6-1.6z" fill="currentColor"/></svg></button>
     <button class="vbtn" data-v="full" title="전체 화면 (F)"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
   const hasPrev = V.idx > 0 || (!V.spread && V.page > 0);
   const hasNext = V.idx < V.list.length - 1 || (!V.spread && V.page < nPages - 1);

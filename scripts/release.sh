@@ -36,6 +36,6 @@ mkdir -p releases dist
 cp "$TMP/MSROAD-$VERSION.zip" "releases/MSROAD-$VERSION.zip"
 cp "$TMP/MSROAD-first-install.zip" dist/MSROAD.zip
 python3 scripts/feed.py releases/latest.json "$VERSION" "releases/MSROAD-$VERSION.zip" "${NOTES[@]+"${NOTES[@]}"}"
-ls -1t releases/MSROAD-*.zip | tail -n +4 | xargs -r rm -f
+ls -1t releases/MSROAD-[0-9]*.zip | tail -n +4 | xargs -r rm -f
 rm -rf "$TMP"
 echo "✔ releases/MSROAD-$VERSION.zip · latest.json · dist/MSROAD.zip — 커밋 · 푸시하면 설치된 앱들이 받아요"

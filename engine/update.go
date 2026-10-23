@@ -21,8 +21,8 @@ import (
 	"time"
 )
 
-// 업데이트는 GitHub 저장소(NeverthelessD/MSROAD)의 releases/latest.json 을 확인합니다.
-const defaultUpdateURL = "https://raw.githubusercontent.com/NeverthelessD/MSROAD/main/releases/latest.json"
+// 업데이트는 GitHub 저장소(NeverthelessD/MSROAD)의 releases/latest.json (맥) · releases/latest-win.json (Windows) 을 확인합니다.
+const feedBase = "https://raw.githubusercontent.com/NeverthelessD/MSROAD/main/releases/"
 
 type Release struct {
 	Version string   `json:"version"`
@@ -52,13 +52,31 @@ func updateURL() string {
 	if u := env("UPDATE_URL"); u != "" {
 		return u
 	}
-	return defaultUpdateURL
+	if isWindows {
+		return feedBase + "latest-win.json"
+	}
+	return feedBase + "latest.json"
 }
 
-func (u *Updater) backupApp() string { return filepath.Join(u.support, "backup", "MSROAD.app") }
+func (u *Updater) backupApp() string {
+	if isWindows {
+		return filepath.Join(u.support, "backup", "MSROAD.exe")
+	}
+	return filepath.Join(u.support, "backup", "MSROAD.app")
+}
+
+func (u *Updater) backupVersionFile() string {
+	if isWindows {
+		return filepath.Join(u.support, "backup", "version.txt")
+	}
+	return filepath.Join(u.backupApp(), "Contents", "Resources", "version.txt")
+}
 
 func (u *Updater) backupVersion() string {
-	b, err := os.ReadFile(filepath.Join(u.backupApp(), "Contents", "Resources", "version.txt"))
+	if !fileExists(u.backupApp()) {
+		return ""
+	}
+	b, err := os.ReadFile(u.backupVersionFile())
 	if err != nil {
 		return ""
 	}
@@ -210,6 +228,9 @@ func appBundle() (string, error) {
 	if p == "" {
 		return "", errors.New("앱 위치를 알 수 없어요. 앱을 다시 실행해 주세요")
 	}
+	if isWindows {
+		return p, nil
+	}
 	if strings.Contains(p, "/AppTranslocation/") {
 		return "", errors.New("다운로드 폴더에서 바로 실행 중이라 업데이트할 수 없어요. MSROAD를 응용 프로그램 폴더로 옮긴 뒤 다시 실행해 주세요")
 	}
@@ -278,6 +299,20 @@ func (u *Updater) install(rel *Release) error {
 	stage := filepath.Join(dir, "stage")
 	if err := unzipAll(zipPath, stage); err != nil {
 		return fmt.Errorf("업데이트 파일을 풀지 못했어요: %v", err)
+	}
+	if isWindows {
+		newExe := filepath.Join(stage, "MSROAD.exe")
+		if !fileExists(newExe) {
+			return errors.New("업데이트 파일 안에 MSROAD.exe가 없어요")
+		}
+		if v, _ := os.ReadFile(filepath.Join(stage, "version.txt")); strings.TrimSpace(string(v)) != rel.Version {
+			return errors.New("업데이트 파일의 버전 정보가 맞지 않아요")
+		}
+		if err := u.swapExe(appPath, newExe, build); err != nil {
+			return err
+		}
+		os.RemoveAll(dir)
+		return nil
 	}
 	newApp := filepath.Join(stage, "MSROAD.app")
 	if !fileExists(filepath.Join(newApp, "Contents", "MacOS", "MSROAD")) {
@@ -361,6 +396,18 @@ func (u *Updater) Rollback() error {
 	if bv == "" {
 		return errors.New("되돌릴 이전 버전이 없어요")
 	}
+	if isWindows {
+		cur := filepath.Join(u.support, "update", "current.exe")
+		os.MkdirAll(filepath.Dir(cur), 0o755)
+		if err := copyPlain(u.backupApp(), cur); err != nil {
+			return fmt.Errorf("이전 버전을 꺼내지 못했어요: %v", err)
+		}
+		if err := u.swapExe(appPath, cur, build); err != nil {
+			return err
+		}
+		os.Remove(cur)
+		return u.afterRollback(bv)
+	}
 	tmp := filepath.Join(u.support, "update", "current.app")
 	os.RemoveAll(tmp)
 	os.MkdirAll(filepath.Dir(tmp), 0o755)
@@ -372,6 +419,10 @@ func (u *Updater) Rollback() error {
 		return fmt.Errorf("이전 버전을 되돌리지 못했어요: %v", err)
 	}
 	moveDir(tmp, u.backupApp())
+	return u.afterRollback(bv)
+}
+
+func (u *Updater) afterRollback(bv string) error {
 	// 되돌린 뒤 곧바로 다시 업데이트되지 않도록 자동 업데이트를 끕니다
 	app.mu.Lock()
 	app.settings.AutoUpdate = false
@@ -396,11 +447,19 @@ func (u *Updater) Restart(port int, token string) error {
 		}()
 		return nil
 	}
-	launcher := filepath.Join(appPath, "Contents", "MacOS", "MSROAD")
-	if !fileExists(launcher) {
-		return errors.New("앱을 찾을 수 없어요")
+	var cmd *exec.Cmd
+	if isWindows {
+		if !fileExists(appPath) {
+			return errors.New("MSROAD.exe를 찾을 수 없어요. 옮기거나 지웠다면 다시 실행해 주세요")
+		}
+		cmd = exec.Command(appPath)
+	} else {
+		launcher := filepath.Join(appPath, "Contents", "MacOS", "MSROAD")
+		if !fileExists(launcher) {
+			return errors.New("앱을 찾을 수 없어요")
+		}
+		cmd = exec.Command("/bin/bash", "-c", `sleep 1; exec "$0"`, launcher)
 	}
-	cmd := exec.Command("/bin/bash", "-c", `sleep 1; exec "$0"`, launcher)
 	cmd.Env = append(os.Environ(), "MSROAD_RESTART=1", "MSROAD_PORT="+strconv.Itoa(port), "MSROAD_TOKEN="+token)
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
@@ -411,6 +470,52 @@ func (u *Updater) Restart(port int, token string) error {
 		app.shutdownWhy("업데이트 후 다시 시작")
 	}()
 	return nil
+}
+
+// swapExe (Windows) keeps the current MSROAD.exe in the backup folder and writes the new one in its place.
+// The user's MSROAD.exe is not running (the engine runs from a copy in bin), so it can be replaced directly.
+func (u *Updater) swapExe(exePath, newExe, curVersion string) error {
+	backup := u.backupApp()
+	os.MkdirAll(filepath.Dir(backup), 0o755)
+	tmpBackup := backup + ".tmp"
+	os.Remove(tmpBackup)
+	if err := copyPlain(exePath, tmpBackup); err != nil {
+		return fmt.Errorf("현재 앱을 보관하지 못했어요: %v", err)
+	}
+	if err := copyPlain(newExe, exePath+".new"); err != nil {
+		os.Remove(tmpBackup)
+		if os.IsPermission(err) || errors.Is(err, os.ErrPermission) {
+			return errors.New("MSROAD.exe가 있는 폴더에 쓸 권한이 없어요. MSROAD 폴더를 ‘문서’나 ‘바탕 화면’으로 옮긴 뒤 다시 실행해 주세요")
+		}
+		return fmt.Errorf("새 버전을 저장하지 못했어요: %v", err)
+	}
+	if err := os.Rename(exePath+".new", exePath); err != nil {
+		os.Remove(exePath + ".new")
+		os.Remove(tmpBackup)
+		return fmt.Errorf("새 버전으로 바꾸지 못했어요: %v", err)
+	}
+	os.Remove(backup)
+	os.Rename(tmpBackup, backup)
+	os.WriteFile(u.backupVersionFile(), []byte(curVersion), 0o644)
+	return nil
+}
+
+func copyPlain(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(dst)
+		return err
+	}
+	return out.Close()
 }
 
 func unzipAll(zipPath, dest string) error {

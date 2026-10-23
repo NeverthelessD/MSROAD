@@ -3,8 +3,9 @@
 // 원본 악보 파일은 바꾸지 않아요. 배치는 세트로 저장하고, 인쇄할 때 PDF 를 새로 만들어요.
 // made by. Nevertheless_D
 import {
-  S, $, $$, esc, api, on, toast, thumbURL, fileURL, plate, parseQuery, matchSheet, confirmBox, clamp, ROADS, versionsOf,
+  S, $, $$, esc, api, on, toast, thumbURL, fileURL, plate, parseQuery, matchSheet, confirmBox, clamp, ROADS, versionsOf, L,
 } from './core.js';
+import { pickFolder } from './panels.js';
 import { loadDoc } from './viewer.js';
 
 // ── 상수 ──
@@ -554,7 +555,7 @@ function renderTop() {
   const dis = !E.set || !itemCount(E.set) ? 'disabled' : '';
   act.innerHTML = `<button class="st-btn" data-top="preview" ${dis} title="인쇄될 모습 미리보기">${I.eye}<span>미리보기</span></button>
     <button class="st-btn" data-top="pdf" ${dis} title="PDF 파일로 저장">${I.down}<span>PDF로 저장</span></button>
-    <button class="st-btn go" data-top="print" ${dis} title="인쇄 (⌘P)">${I.print}<span>인쇄</span><kbd>⌘P</kbd></button>`;
+    <button class="st-btn go" data-top="print" ${dis} title="인쇄 (${L.mod}P)">${I.print}<span>인쇄</span><kbd>${L.mod}P</kbd></button>`;
 }
 document.addEventListener('click', (e) => {
   const t = e.target.closest('[data-top]')?.dataset.top;
@@ -1547,7 +1548,7 @@ function renderPreview(full) {
   E.pv = clamp(E.pv, 0, s.pages.length - 1);
   if (full || !$('#pvMain')) {
     L.innerHTML = `<div class="pv-head"><button class="btn" data-pv="close">${I.back}편집</button><b>미리보기</b><span class="muted">${esc(s.name)} · ${s.paper} ${s.orient === 'landscape' ? '가로' : '세로'} · ${s.pages.length}쪽 · 악보 ${itemCount(s)}개</span>
-        <span class="spacer"></span><button class="btn" data-pv="pdf">${I.down}PDF로 저장</button><button class="btn go" data-pv="print">${I.print}인쇄 <span class="kbd">⌘P</span></button></div>
+        <span class="spacer"></span><button class="btn" data-pv="pdf">${I.down}PDF로 저장</button><button class="btn go" data-pv="print">${I.print}인쇄 <span class="kbd">${L.mod}P</span></button></div>
       <div class="pv-body"><nav class="pv-nav" id="pvNav"></nav>
         <div class="pv-main" id="pvMain"></div>
         <aside class="pv-side" id="pvSide"></aside></div>`;
@@ -1576,7 +1577,7 @@ function renderPreview(full) {
     <div class="pp-sec"><span class="pp-h">페이지</span><div class="seg full" data-range><button data-v="all" class="${P.range === 'all' ? 'on' : ''}">전체 ${s.pages.length}쪽</button><button data-v="current" class="${P.range === 'current' ? 'on' : ''}">지금 쪽만 (${E.pv + 1}쪽)</button></div></div>
     <div class="pp-tg"><span>양면 인쇄</span><button class="tg ${P.duplex ? 'on' : ''}" data-duplex aria-pressed="${P.duplex}" aria-label="양면 인쇄"><i></i></button></div>
     <div class="pp-sec"><span class="pp-h">PDF 파일 이름</span><input type="text" class="st-input" id="pvName" value="${esc(defaultPdfName())}" maxlength="80" aria-label="PDF 파일 이름"></div>
-    <div class="pv-note"><b>인쇄</b>를 누르면 맥 인쇄 창이 열려요. 프린터와 용지를 그곳에서 고르면 돼요.</div>
+    <div class="pv-note">${L.win ? '<b>인쇄</b>를 누르면 PDF 창이 열려요. 창 위쪽 🖨 버튼(또는 Ctrl+P)을 누르고 프린터와 용지를 고르면 돼요.' : '<b>인쇄</b>를 누르면 맥 인쇄 창이 열려요. 프린터와 용지를 그곳에서 고르면 돼요.'}</div>
     ${s.paper === 'A3' ? '<div class="pv-note warn"><b>A3 용지</b>를 쓸 수 있는 프린터인지 확인하세요. 안 되면 인쇄 창에서 <b>\'용지에 맞추기\'</b>로 A4에 줄여 인쇄할 수 있어요.</div>' : ''}
 `;
   $('#pvName').addEventListener('input', (e) => { E.print.name = e.target.value; });
@@ -1681,6 +1682,11 @@ export async function printNow() {
       const r = await b.postMessage({ type: 'print', path: j.path, name: j.name, paper: E.set.paper, landscape: E.set.orient === 'landscape', copies: E.print.copies, duplex: E.print.duplex });
       if (r?.error) toast('⚠️ ' + esc(r.error));
     } catch (e) { toast('⚠️ 인쇄 창을 열지 못했어요: ' + esc(e.message || e)); }
+  } else if (L.win) {
+    // Windows: 만든 PDF 를 새 창(Edge · Chrome 의 PDF 보기)으로 열어서 인쇄해요
+    const r = await api('/api/print/open', { path: j.path }).catch(() => null);
+    const w = r?.url ? window.open(r.url, '_blank', 'width=1100,height=860') : null;
+    toast(w ? 'PDF 창이 열렸어요. 위쪽 🖨 버튼(또는 <b>Ctrl+P</b>)을 눌러 인쇄해요' : '⚠️ PDF 창을 열지 못했어요. <b>PDF로 저장</b>한 뒤 인쇄해 주세요', { ms: 7000 });
   } else {
     await api('/api/print/open', { path: j.path }).catch(() => {});
     toast('PDF를 <b>미리보기</b> 앱으로 열었어요. 거기에서 인쇄해 주세요 (⌘P)', { ms: 6000 });
@@ -1698,13 +1704,21 @@ export async function savePDF() {
       if (r?.error) return toast('⚠️ ' + esc(r.error));
       if (!r || r.canceled) return;
       dest = r.dest;
+    } else if (L.win) {
+      let last = '';
+      try { last = localStorage.getItem('msroad-pdfdir') || ''; } catch { /* */ }
+      const dir = await pickFolder({ title: 'PDF를 저장할 폴더', hint: `‘${j.name}’ 파일로 저장해요. 같은 이름이 있으면 (2)를 붙여요.`, start: last, ok: '이 폴더에 저장' });
+      if (!dir) return;
+      try { localStorage.setItem('msroad-pdfdir', dir); } catch { /* */ }
+      const r = await api('/api/print/save', { path: j.path, name: j.name, dir });
+      dest = r.dest;
     } else {
       const r = await api('/api/print/save', { path: j.path, name: j.name });
       if (r.canceled) return;
       dest = r.dest;
     }
   } catch (e) { return toast('⚠️ ' + esc(e.message || e)); }
-  toast(`PDF를 저장했어요 · ${esc(dest.split('/').pop())}`, { action: 'Finder에서 보기', onAction: () => api('/api/reveal-file', { path: dest }).catch(() => {}) });
+  toast(`PDF를 저장했어요 · ${esc(dest.split(/[\\/]/).pop())}`, { action: `${L.fm}에서 보기`, onAction: () => api('/api/reveal-file', { path: dest }).catch(() => {}) });
 }
 
 // ══════════════════════════════════════════════════════ 모드 전환 · 단축키

@@ -3,7 +3,7 @@
 
 # MSROAD — 프로젝트 노트
 
-악보 분류 · 미리보기 macOS 앱 (Apple Silicon). made by. Nevertheless_D
+악보 분류 · 미리보기 · 편집 · 인쇄 앱. macOS (Apple Silicon) + Windows 10/11 (1.2.1~). made by. Nevertheless_D
 사용자는 개발자가 아니에요. 한국어로 쉽게 설명하고, 터미널 사용을 요구하지 말 것. 결과물은 더블클릭으로 쓸 수 있게.
 
 ---
@@ -25,10 +25,16 @@
 ### 다음에 할 수 있는 일
 - [x] 실제 맥(macOS 27)에서 1.1.0 실행 확인 (2026-10-22, 사용자)
 - [ ] 1.2.0 편집 · 인쇄를 사용자 맥에서 확인 (실제 프린터 인쇄 · A3 · 양면)
-- [ ] Windows 버전 (사용자가 나중에 요청 예정): YTROAD의 `launcher_windows.go` 방식(하나의 .exe가 실행기 겸 엔진),
-      폴더 고르기는 앱 안 탐색 화면, 썸네일/HEIC 변환은 Windows 도구로 바꾸기, `releases/latest-win.json`
+- [x] Windows 버전 1.2.1 (2026-10-23, Wine 에서 확인)
+- [ ] 실제 Windows PC 에서 확인: SmartScreen, Edge 앱 창, PDF 인쇄 창(Edge PDF 보기) · Ctrl+P, 탐색기 /select, 한글 경로 · OneDrive 폴더
 
 ### 작업 기록
+- 2026-10-23 Windows 1.2.1 — 사용자 요청: 맥과 같은 기능의 Windows 버전, **HEIC 는 빼기**. YTROAD 방식:
+  MSROAD.exe 하나 = 실행기 + 엔진(`--engine`), `%LOCALAPPDATA%\MSROAD` 에 엔진 복사 · Edge/Chrome `--app` 창. 폴더 고르기 · PDF 저장 위치는
+  앱 안 폴더 목록(pickFolder, /api/fs/list · /api/fs/mkdir), 썸네일은 Go(gothumb.go, JPG · PNG · GIF, EXIF 회전), WEBP 는 원본 그대로,
+  인쇄 = PDF 를 새 창(/api/print/file)으로 열고 Ctrl+P, 화면 글자 Finder→탐색기 · ⌘→Ctrl(core.js `L`, settings.os).
+  Wine 에서 확인: 켜기, 악보 8개(HEIC 빠짐), 썸네일, 편집 → PDF 를 고른 폴더에 저장(A3 3쪽), 업데이트 1.2.1→1.2.9 교체 · 같은 주소로 재시작 · 되돌리기.
+  맥 release.sh 정리 패턴을 `MSROAD-[0-9]*.zip` 으로 바꿔 Windows zip 을 지우지 않게 함.
 - 2026-10-23 v1.2.1 — 사용자 요청: 악보를 늘리면 칸 밖으로 나가 잘림 → ① 칸은 그대로, 악보 크기만 칸 안에서 바뀜(넘지 않음)
   ② 가로 · 세로를 따로 늘리고 줄이기. 크기 방식: 칸에 맞추기(fit) · 칸 가득 늘리기(stretch) · 직접 조절(manual, mrect = 칸 안 자리 0~1).
   손잡이 8개(모서리 = 크기, 가장자리 = 가로나 세로만), 가로 · 세로 막대(맞춤 대비 %), 비율 유지 켜고 끄기(item.lock), '원래 비율로'.
@@ -119,6 +125,21 @@ app/shell/main.swift   (1.2.0) Bridge(WKScriptMessageHandlerWithReply 'msroad'):
 ```
 엔진 실행 사슬: MSROAD.app(Swift, Dock) → msroad-engine(지킴이, MSROAD_SUPERVISOR=1) → msroad-engine(엔진, MSROAD_CHILD=1). 주소 127.0.0.1:47917.
 
+### Windows (1.2.1~)
+```
+engine/launcher_windows.go  MSROAD.exe 를 두 번 누르면: 이미 켜져 있으면 창만 → 아니면 자기 자신을 %LOCALAPPDATA%\MSROAD\bin\msroad-engine.exe 로 복사,
+                            --engine 으로 숨겨 켜고(MSROAD_VIA=windows), Edge/Chrome --app 창(1380×900). 사용자의 MSROAD.exe 는 실행 중이 아니라서 업데이트가 바로 교체 가능
+engine/platform.go          isWindows · uiOS()(MSROAD_FAKE_OS 로 리눅스에서 Windows 화면 시험) · noHEIC()
+engine/fsapi.go             앱 안 폴더 고르기: 바탕 화면 · 문서 · 다운로드 · 사진 · 음악 · OneDrive · 드라이브(C~Z), 새 폴더
+engine/gothumb.go           sips 없을 때 썸네일(JPG · PNG · GIF → JPEG, EXIF 회전). 그 밖은 원본을 그대로 보냄
+engine/update.go            Windows: releases/latest-win.json → MSROAD-win-<v>.zip(MSROAD.exe + version.txt), 백업 Support/backup/MSROAD.exe
+scripts/build-win.sh        리눅스에서 빌드(go-winres 아이콘) → releases/MSROAD-win-<v>.zip · latest-win.json · dist/MSROAD-Windows.zip(+ 사용 가이드)
+docs/guide-win.html         Windows 사용 가이드 원본 → `python3 scripts/guide.py win`
+```
+Wine 시험: `apt-get install wine64 wine xvfb`, `WINEDEBUG=-all LC_ALL=C.UTF-8 xvfb-run -a env MSROAD_SUPPORT='Z:\tmp\x\sup' wine MSROAD.exe`
+(Edge 가 없어 창은 안 뜨지만 엔진은 뜸 → Support\token · port 로 Playwright 접속). 업데이트 시험은 MSROAD_UPDATE_URL 에 로컬 http 서버의 latest-win.json.
+끌 때는 `wineserver -k`.
+
 ### 아래는 1.0.x 시절 구조 (참고용)
 
 ```
@@ -199,6 +220,8 @@ osascript 폴더 선택 창, sips 썸네일/HEIC 변환(특히 WEBP · PDF 첫 �
    `git fetch origin +refs/heads/ci-results:refs/remotes/origin/ci-results && git archive origin/ci-results | tar -x -C <임시폴더>`
    → status.json(build/smoke 모두 ok), results.txt, shot-app.png 확인
 3. `scripts/release.sh --notes "바뀐 점 1" "바뀐 점 2"` → 커밋 · 푸시. 처음 설치용은 dist/MSROAD.zip.
+4. Windows 도 같이 낼 때: `scripts/build-win.sh --notes …` → releases/MSROAD-win-<v>.zip · latest-win.json 커밋 · 푸시. 처음 설치용은 dist/MSROAD-Windows.zip.
+   맥과 Windows 는 피드가 따로라서 한쪽만 내도 돼요. 엔진/화면 공통 코드를 고쳤으면 둘 다 내는 게 좋아요.
 
 ## 업데이트 내보내는 법 (1.0.x, 참고용)
 

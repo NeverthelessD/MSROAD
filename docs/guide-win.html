@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>MSROAD Windows 사용 가이드</title>
+<!-- 사용 가이드 이미지 원본. scripts/guide.py 로 docs/MSROAD_Windows_사용가이드.png 를 만들어요 -->
+<style>
+@font-face { font-family: "Pretendard"; src: url("../engine/web/fonts/PretendardVariable.woff2") format("woff2-variations"); font-weight: 100 900; }
+@font-face { font-family: "Unbounded"; src: url("../engine/web/fonts/unbounded-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+@font-face { font-family: "Unbounded"; src: url("../engine/web/fonts/unbounded-latin-800-normal.woff2") format("woff2"); font-weight: 800; }
+:root {
+  --rA: #ff5d6c; --rB: #ff8f3f; --rC: #f2b31d; --rD: #2fbf71; --rE: #1fb3d6; --rF: #4d7cff; --rG: #9b6bff; --brand: #8b7dff;
+  --bg: #14131f; --card: #1d1c2c; --line: rgba(220,215,255,.1); --text: #f1f0fa; --muted: #a4a1c0; --faint: #6f6c8e;
+}
+* { box-sizing: border-box; }
+body { margin: 0; width: 1200px; background: var(--bg); color: var(--text); font: 15px/1.6 "Pretendard", sans-serif; -webkit-font-smoothing: antialiased; }
+.wrap { padding: 0 32px 30px; }
+.hero { position: relative; padding: 46px 48px 30px; display: flex; gap: 30px; align-items: center;
+  background: radial-gradient(700px 260px at 70% 0%, rgba(124,108,255,.28), transparent 70%); }
+.hero img { width: 116px; height: 116px; }
+.hero h1 { margin: 0; display: flex; align-items: baseline; gap: 14px; font: 800 54px/1 "Unbounded", sans-serif; letter-spacing: .01em; }
+.hero h1 span { font: 700 26px "Pretendard"; color: var(--muted); letter-spacing: 0; }
+.hero p { margin: 10px 0 14px; font-size: 18px; font-weight: 600; }
+.pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { padding: 5px 13px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.04); font-size: 13.5px; font-weight: 650; }
+.roads { display: flex; gap: 8px; padding: 0 32px; margin-bottom: 26px; }
+.roads i { flex: 1; height: 7px; border-radius: 4px; }
+h2 { margin: 26px 4px 12px; font-size: 22px; font-weight: 800; display: flex; align-items: baseline; gap: 12px; }
+h2 small { font-size: 14px; font-weight: 500; color: var(--muted); }
+.row { display: grid; gap: 14px; }
+.c4 { grid-template-columns: repeat(4, 1fr); }
+.c2 { grid-template-columns: 1fr 1fr; }
+.c32 { grid-template-columns: 1.08fr 1fr; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; }
+.step b.n { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: rgba(255,255,255,.08); font: 800 14px "Unbounded"; }
+.step h3 { margin: 12px 0 6px; font-size: 16.5px; }
+.step p { margin: 0; color: var(--muted); font-size: 13.5px; }
+.step p strong { color: var(--text); }
+.plate { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 22px; padding: 0 7px; border-radius: 7px; color: #fff;
+  font: 700 12px/1 "Unbounded", sans-serif; box-shadow: inset 0 -2px 0 rgba(0,0,0,.15); vertical-align: 1px; }
+.rA { --r: var(--rA); } .rB { --r: var(--rB); } .rC { --r: var(--rC); } .rD { --r: var(--rD); } .rE { --r: var(--rE); } .rF { --r: var(--rF); } .rG { --r: var(--rG); }
+.plate { background: var(--r, #77758f); }
+.names .nr { display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 0; border-top: 1px solid var(--line); align-items: center; }
+.names .nr:first-of-type { border-top: 0; }
+.fn { font-size: 16px; font-weight: 600; }
+.fn .c { color: var(--r); font-weight: 800; }
+.fn .p { color: var(--brand); font-weight: 800; }
+.fn .e { color: var(--faint); }
+.nr .w { font-size: 13px; color: var(--muted); text-align: right; }
+.card h4 { margin: 0 0 10px; font-size: 17px; font-weight: 800; }
+.kv { display: grid; grid-template-columns: 88px 1fr; gap: 10px; padding: 7px 0; font-size: 14px; }
+.kv b { color: var(--muted); font-weight: 650; }
+.road-demo { display: flex; gap: 6px; margin: 4px 0 10px; }
+.road-demo span { flex: 1; height: 36px; border-radius: 10px; display: grid; place-items: center; font: 800 15px "Unbounded"; color: #fff; background: var(--r); }
+.keys { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 9px 14px; align-items: center; font-size: 14px; }
+.keys .k { display: flex; gap: 4px; justify-content: flex-end; }
+kbd { display: inline-grid; place-items: center; min-width: 28px; height: 28px; padding: 0 7px; border-radius: 7px; background: rgba(255,255,255,.06); border: 1px solid var(--line); font: 700 12.5px "Pretendard"; }
+.tips { display: flex; flex-direction: column; gap: 11px; }
+.tip { display: grid; grid-template-columns: 30px 1fr; gap: 10px; font-size: 14px; color: var(--muted); }
+.tip .i { font-size: 19px; line-height: 1.3; }
+.tip strong { color: var(--text); }
+.search-ex { display: flex; flex-direction: column; gap: 8px; }
+.sx { display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: center; font-size: 14px; }
+.sx .q { padding: 6px 12px; border-radius: 10px; background: rgba(255,255,255,.06); border: 1px solid var(--line); font-weight: 700; }
+.sx span { color: var(--muted); }
+.foot { text-align: center; margin-top: 26px; font: 700 15px "Unbounded"; letter-spacing: .05em; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <img src="../app/AppIcon.png" alt="">
+  <div>
+    <h1>MSROAD <span>Windows 사용 가이드</span></h1>
+    <p>악보 파일 이름의 코드를 읽어서 A부터 G까지 일곱 ROAD로 나누고, 바로 크게 봐요</p>
+    <div class="pills">
+      <span class="pill">🪟 Windows 10 · 11 (64비트)</span>
+      <span class="pill">🧭 설치 없이 MSROAD.exe 하나</span>
+      <span class="pill">🖼 JPG · PNG · GIF · WEBP · PDF</span>
+      <span class="pill">🔎 이름 · 초성 · 코드 검색</span>
+      <span class="pill">🖨 편집 · 인쇄 · PDF</span>
+      <span class="pill">🔄 자동 업데이트</span>
+      <span class="pill">🌓 라이트 · 다크</span>
+    </div>
+  </div>
+</div>
+<div class="roads"><i style="background:var(--rA)"></i><i style="background:var(--rB)"></i><i style="background:var(--rC)"></i><i style="background:var(--rD)"></i><i style="background:var(--rE)"></i><i style="background:var(--rF)"></i><i style="background:var(--rG)"></i></div>
+
+<div class="wrap">
+  <h2>처음 한 번만 <small>1분이면 끝나요</small></h2>
+  <div class="row c4">
+    <div class="card step"><b class="n">1</b><h3>압축 풀고 옮기기</h3><p><strong>MSROAD-Windows.zip</strong>을 오른쪽 클릭 → <strong>모두 압축 풀기</strong>. 나온 <strong>MSROAD</strong> 폴더를 문서 같은 편한 곳에 두고 <strong>MSROAD.exe</strong>를 두 번 눌러요.</p></div>
+    <div class="card step"><b class="n">2</b><h3>보안 허용</h3><p>파란 <strong>“Windows의 PC 보호”</strong> 창이 뜨면 <strong>추가 정보</strong> → <strong>실행</strong>. 처음 한 번만 물어봐요.</p></div>
+    <div class="card step"><b class="n">3</b><h3>악보 폴더 고르기</h3><p><strong>악보 폴더 고르기</strong>를 누르면 앱 안에 폴더 목록이 떠요. 바탕 화면 · 문서 · 드라이브에서 찾아 들어가 <strong>이 폴더의 악보 보기</strong>. 하위 폴더까지 함께 읽어요.</p></div>
+    <div class="card step"><b class="n">4</b><h3>다음부터는 바로</h3><p>앱을 켜면 마지막에 본 폴더가 그대로 열려요. 위쪽 <strong>📁 폴더 이름</strong>을 누르면 바꿀 수 있어요.</p></div>
+  </div>
+
+  <div class="row c32" style="margin-top:14px">
+    <div class="card names">
+      <h4>파일 이름은 이렇게 지어요</h4>
+      <div class="nr"><div class="fn rA">구주의십자가보혈로<span class="c">Ab</span><span class="e">.jpg</span></div><div class="w">확장자 바로 앞의 코드</div></div>
+      <div class="nr"><div class="fn rF">광야를지나며<span class="c">F#m</span><span class="e">.png</span></div><div class="w">b 플랫 · # 샵 · m 마이너</div></div>
+      <div class="nr"><div class="fn rG">Amazing Grace<span class="c">_G</span><span class="e">.png</span></div><div class="w">영어 제목은 _ 다음에 코드</div></div>
+      <div class="nr"><div class="fn rA">주의은혜라<span class="c">A</span><span class="p">_1</span><span class="e">.jpg</span> · 주의은혜라<span class="c">A</span><span class="p">_2</span><span class="e">.jpg</span></div><div class="w">여러 장이면 _1, _2 …</div></div>
+    </div>
+    <div class="card">
+      <h4>일곱 개의 ROAD와 갈림길</h4>
+      <div class="road-demo"><span class="rA">A</span><span class="rB">B</span><span class="rC">C</span><span class="rD">D</span><span class="rE">E</span><span class="rF">F</span><span class="rG">G</span></div>
+      <div class="kv"><b>ROAD</b><span>코드의 첫 글자로 나눈 길. <span class="plate rA">Ab</span> <span class="plate rA">A</span> <span class="plate rA">Am</span> 은 모두 A ROAD</span></div>
+      <div class="kv"><b>세부 코드</b><span>ROAD 안에서 코드별로 다시 나눠 보여 줘요. 위쪽 칩이나 왼쪽 목록에서 골라요</span></div>
+      <div class="kv"><b>갈림길</b><span>코드를 못 찾은 악보가 모이는 곳. <strong>코드 정하기</strong>를 누르면 파일 이름 끝에 코드를 붙여 알맞은 ROAD로 옮겨요</span></div>
+    </div>
+  </div>
+
+  <div class="row c2" style="margin-top:14px">
+    <div class="card">
+      <h4>찾기 <span style="font-weight:500;color:var(--muted);font-size:13px">Ctrl+F 또는 /</span></h4>
+      <div class="search-ex">
+        <div class="sx"><div class="q">광야</div><span>곡 이름 일부</span></div>
+        <div class="sx"><div class="q">ㄱㅇㄹ</div><span>초성 (한글 첫 자음)</span></div>
+        <div class="sx"><div class="q">F#m</div><span>코드 — 대문자로 시작해요 (Ab, Bb, C#m)</span></div>
+        <div class="sx"><div class="q">ㅇㅅ D</div><span>섞어서: 초성 ‘ㅇㅅ’이 들어간 D 코드 악보</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h4>미리보기 단축키 <span style="font-weight:500;color:var(--muted);font-size:13px">악보를 누르면 크게 열려요</span></h4>
+      <div class="keys">
+        <div class="k"><kbd>←</kbd><kbd>→</kbd></div><div>이전 · 다음 장 (스페이스도 돼요)</div>
+        <div class="k"><kbd>↑</kbd><kbd>↓</kbd></div><div>같은 곡의 다른 키</div>
+        <div class="k"><kbd>+</kbd><kbd>−</kbd></div><div>확대 · 축소 (Ctrl+휠도 돼요)</div>
+        <div class="k"><kbd>0</kbd><kbd>W</kbd></div><div>화면 맞춤 · 폭 맞춤</div>
+        <div class="k"><kbd>F</kbd></div><div>전체 화면</div>
+        <div class="k"><kbd>S</kbd></div><div>여러 장 펼쳐 보기</div>
+        <div class="k"><kbd>C</kbd></div><div>코드 정하기 · 바꾸기</div>
+        <div class="k"><kbd>esc</kbd></div><div>닫기</div>
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-top:12px">위쪽 <span class="plate rA">Ab</span> <span class="plate rA">A</span> <span class="plate rG">G</span> 같은 키 버튼을 눌러도 바로 바뀌어요. 확대했을 땐 끌어서 움직이고, 두 번 누르면 크게 · 원래대로.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h4>🖨 편집 · 인쇄 <span style="font-weight:500;color:var(--muted);font-size:13px">위쪽 <strong style="color:var(--text)">편집 · 인쇄</strong>를 누르면 열려요 · 원본 악보 파일은 그대로예요</span></h4>
+    <div class="row c4" style="margin-top:6px">
+      <div class="step"><b class="n">1</b><h3>틀 고르기</h3><p><strong>A4 · A3</strong>, 세로 · 가로, 한 페이지에 <strong>1곡 · 2곡 · 3곡 나란히</strong> 또는 <strong>자유 배치</strong>. A3 가로에 2곡이면 곡마다 A4 크기 그대로예요.</p></div>
+      <div class="step"><b class="n">2</b><h3>악보 넣기</h3><p>왼쪽 목록에서 <strong>끌어서 칸에 놓거나 두 번 눌러요.</strong> 여러 장 악보는 다음 칸에 이어서 들어가고, 칸끼리 끌어 자리를 바꿔요.</p></div>
+      <div class="step"><b class="n">3</b><h3>다듬기</h3><p><strong>자르기</strong>(빈 여백 자동) · <strong>확대 · 축소</strong>는 칸 안에서, <strong>가로 · 세로 따로</strong>도 돼요(가장자리 끌기). 다른 키로 바꾸기 · Ctrl+Z로 되돌리기.</p></div>
+      <div class="step"><b class="n">4</b><h3>인쇄 · PDF</h3><p><strong>미리보기</strong>로 확인하고 <strong>인쇄</strong>(Ctrl+P) — PDF 창이 열리면 그 창에서 한 번 더 <strong>Ctrl+P</strong> — 또는 <strong>PDF로 저장</strong>. 배치는 <strong>세트</strong>로 자동 저장돼 다음에 다시 열어요.</p></div>
+    </div>
+  </div>
+
+  <div class="row c2" style="margin-top:14px">
+    <div class="card">
+      <h4>그 밖에</h4>
+      <div class="kv"><b>오른쪽 클릭</b><span>미리보기 · 코드 바꾸기 · 탐색기에서 보기 · 기본 앱으로 열기</span></div>
+      <div class="kv"><b>새 악보</b><span>앱을 켤 때 · 창으로 돌아올 때 폴더를 알아서 다시 읽어요. 위쪽 <strong>⟳ 새로고침</strong>(Ctrl+R)으로 바로 읽을 수도 있어요. 새로 들어온 악보는 <strong>NEW</strong>에 모이고 ‘새 악보’ 표시가 붙어요</span></div>
+      <div class="kv"><b>보기</b><span>이름순 · 최근 바뀐 순, 악보 크기 작게 · 보통 · 크게</span></div>
+      <div class="kv"><b>화면 모드</b><span>오른쪽 위에서 시스템 설정 따르기(기본) · 라이트 · 다크</span></div>
+      <div class="kv"><b>업데이트</b><span>새 버전이 나오면 앱이 알아서 받아요. 오른쪽 위 <strong>버전 표시</strong>를 누르면 지금 버전 확인 · 업데이트 확인 · 이전 버전으로 되돌리기</span></div>
+    </div>
+    <div class="card">
+      <h4>⚠️ 알아두면 좋은 점</h4>
+      <div class="tips">
+        <div class="tip"><span class="i">🛡️</span><div><strong>악보 파일은 옮기거나 지우지 않아요.</strong> 그 자리에서 읽기만 해요.</div></div>
+        <div class="tip"><span class="i">✏️</span><div><strong>코드 정하기는 실제 파일 이름을 바꿔요.</strong> 바꾼 직후 알림의 <strong>되돌리기</strong>로 원래대로 돌릴 수 있어요.</div></div>
+        <div class="tip"><span class="i">☁️</span><div><strong>OneDrive · 공유 폴더라면</strong> 바뀐 이름이 다른 기기와 사람에게도 그대로 보여요.</div></div>
+        <div class="tip"><span class="i">🔤</span><div><strong>코드는 대문자 A~G로.</strong> 소문자(ab.jpg)나 영어 제목 바로 뒤에 붙인 코드(HolyD.jpg)는 못 읽어요 → Holy_D.jpg</div></div>
+        <div class="tip"><span class="i">📷</span><div><strong>HEIC(아이폰 사진)는 Windows 버전에서 읽지 않아요.</strong> 아이폰에서 JPG로 내보내거나, 설정 → 카메라 → 포맷 → <strong>높은 호환성</strong>으로 찍어요.</div></div>
+        <div class="tip"><span class="i">⏻</span><div><strong>끄려면</strong> 오른쪽 위 <strong>⏻</strong>를 눌러요. 창만 닫았다면 MSROAD.exe를 다시 누르면 그대로 열리고, 오래 안 쓰면 알아서 꺼져요.</div></div>
+        <div class="tip"><span class="i">⏳</span><div><strong>PDF 악보는 처음 볼 때 조금 걸려요.</strong> 한 번 만든 미리보기는 저장해 둬서 다음엔 빨라요.</div></div>
+        <div class="tip"><span class="i">🗑️</span><div><strong>깔끔하게 지우려면</strong> MSROAD 폴더를 지우고, 탐색기 주소창에 <strong>%LOCALAPPDATA%</strong>를 넣어 열리는 곳의 MSROAD 폴더도 지워요.</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">made by. Nevertheless_D</div>
+</div>
+</body>
+</html>

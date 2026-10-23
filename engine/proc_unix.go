@@ -4,6 +4,7 @@ package main
 
 import (
 	"os/exec"
+	"runtime"
 	"syscall"
 )
 
@@ -13,3 +14,21 @@ func detach(cmd *exec.Cmd) {
 
 // detachSelf moves this process into its own session, so it keeps running when the launcher ends.
 func detachSelf() { syscall.Setsid() }
+
+func hideWindow(cmd *exec.Cmd) {}
+
+// openPaths opens files/folders with their default app (Finder · 미리보기 …).
+func openPaths(paths []string) {
+	if runtime.GOOS == "darwin" && len(paths) > 0 {
+		exec.Command("/usr/bin/open", paths...).Start()
+	}
+}
+
+// revealPaths shows the files selected in Finder.
+func revealPaths(paths []string) {
+	if runtime.GOOS == "darwin" && len(paths) > 0 {
+		exec.Command("/usr/bin/open", append([]string{"-R"}, paths...)...).Start()
+	}
+}
+
+func messageBox(title, msg string) {}

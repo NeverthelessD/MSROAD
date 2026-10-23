@@ -1,0 +1,11 @@
+{
+  "version": "1.2.1",
+  "date": "2026-10-23",
+  "zip": "MSROAD-win-1.2.1.zip",
+  "sha256": "332fd693a92b14785498d179cc39984f5cfdbeccc488edbaf063cd38a9618299",
+  "size": 7390778,
+  "notes": [
+    "Windows 버전이 새로 나왔어요 (맥과 같은 기능 · 자동 업데이트)",
+    "Windows 버전은 HEIC(아이폰 사진)를 읽지 않아요"
+  ]
+}

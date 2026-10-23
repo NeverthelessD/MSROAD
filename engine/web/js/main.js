@@ -2,7 +2,7 @@
 // made by. Nevertheless_D
 import {
   S, $, $$, esc, api, on, emit, ROADS, CROSS, thumbURL, saveUI, roadOf, chordOrder, plate,
-  prepTitle, parseQuery, matchSheet, highlight, toast, shortPath, modalOpen, versionsOf, IS_SHELL, logoSVG,
+  prepTitle, parseQuery, matchSheet, highlight, toast, shortPath, modalOpen, versionsOf, IS_SHELL, logoSVG, L, setPlatform,
 } from './core.js';
 import { openViewer, viewerOpen, viewerSync, renderPdfThumb } from './viewer.js';
 import { openPicker, closePicker, pickerOpen } from './picker.js';
@@ -220,7 +220,7 @@ function heroHTML() {
     ['구주의십자가보혈로', 'Ab', '', '.jpg', 'A', '한글 제목 + 코드'],
     ['광야를지나며', 'F#m', '', '.png', 'F', '샵 · 마이너도 그대로'],
     ['Amazing Grace_', 'G', '', '.jpg', 'G', '영어 제목은 _ 다음에 코드'],
-    ['주의은혜라', 'A', '_1', '.heic', 'A', '여러 장이면 _1, _2 …'],
+    ['주의은혜라', 'A', '_1', L.win ? '.jpg' : '.heic', 'A', '여러 장이면 _1, _2 …'],
   ];
   return `<div class="hero"><div class="hero-card">
     <div class="road-art">${ROADS.map((R) => `<i class="r${R}">${R}</i>`).join('')}</div>
@@ -257,7 +257,7 @@ export function render(scrollTop) {
       : S.road === CROSS
         ? `<div class="nothing"><div style="font-size:38px">🎉</div><b>갈림길이 비었어요</b>모든 악보에 코드가 있어요.</div>`
         : !S.sheets.length
-          ? `<div class="nothing"><div style="font-size:38px">🗂️</div><b>이 폴더에는 악보 파일이 없어요</b>JPG · PNG · HEIC · GIF · WEBP · PDF 파일을 읽어요.<br><button class="btn" data-act="choose" style="margin-top:16px">다른 폴더 고르기</button></div>`
+          ? `<div class="nothing"><div style="font-size:38px">🗂️</div><b>이 폴더에는 악보 파일이 없어요</b>${L.formats} 파일을 읽어요.${L.win ? '<br>HEIC(아이폰 사진)는 Windows 버전에서 읽지 않아요. JPG로 바꿔 넣어 주세요.' : ''}<br><button class="btn" data-act="choose" style="margin-top:16px">다른 폴더 고르기</button></div>`
           : `<div class="nothing"><div style="font-size:38px">🛣️</div><b>이 ROAD에는 아직 악보가 없어요</b></div>`;
   }
   body += secs.map((sec) => `<section class="sec r${sec.road}">
@@ -322,7 +322,7 @@ export function showMenu(x, y, s) {
   const el = $('#ctx');
   el.innerHTML = `<button data-m="view">미리보기</button>
     <button data-m="chord">${s.chord ? '코드 바꾸기…' : '코드 정하기…'}</button><hr>
-    <button data-m="reveal">Finder에서 보기</button>
+    <button data-m="reveal">${L.fm}에서 보기</button>
     <button data-m="open">기본 앱으로 열기</button>`;
   el.hidden = false;
   const r = el.getBoundingClientRect();
@@ -405,6 +405,7 @@ async function poll() {
 
 async function init() {
   S.settings = await api('/api/settings');
+  setPlatform(S.settings.os);
   applyTheme(S.settings.appearance);
   S.sort = S.settings.ui?.sort || 'name';
   S.size = S.settings.ui?.size || 'm';

@@ -4,6 +4,18 @@
 export const T = new URLSearchParams(location.search).get('t') || '';
 // Dock 에 보이는 MSROAD 앱(1.1.0~) 안에서 열린 화면인지
 export const IS_SHELL = navigator.userAgent.includes('MSROADShell');
+// 맥 · Windows 문구 (설정의 os 를 받은 뒤 setPlatform 으로 정해요)
+export const L = { fm: 'Finder', mod: '⌘', os: 'macOS', win: false, formats: 'JPG · PNG · HEIC · GIF · WEBP · PDF' };
+export function setPlatform(os) {
+  if (os === 'windows') Object.assign(L, { fm: '탐색기', mod: 'Ctrl+', os: 'Windows', win: true, formats: 'JPG · PNG · GIF · WEBP · PDF' });
+  document.documentElement.dataset.os = L.win ? 'windows' : 'mac';
+  const kbd = document.querySelector('#searchBox kbd');
+  if (kbd) kbd.textContent = L.mod + 'F';
+  const rs = document.querySelector('#rescanBtn');
+  if (rs) rs.title = `악보 폴더를 다시 읽어 새로 넣은 악보를 보여 줘요 (${L.mod}R)`;
+  const th = document.querySelector('#themeSeg [data-theme="system"]');
+  if (th) th.title = `${L.os} 설정 따르기`;
+}
 export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -258,7 +270,7 @@ export function goOffline() {
   el.innerHTML = `<div class="offline-card">
       ${logoSVG(64)}
       <h2>MSROAD가 잠시 쉬고 있어요</h2>
-      <p>한동안 쓰지 않았거나 맥이 잠자기에 들어가면 엔진이 쉬어요.<br><b>Dock이나 응용 프로그램 폴더에서 MSROAD를 다시 열면</b> 이 창이 저절로 이어져요.</p>
+      <p>${L.win ? '한동안 쓰지 않았거나 컴퓨터가 절전 모드에 들어가면 엔진이 쉬어요.<br><b>MSROAD.exe를 다시 실행하면</b> 이 창이 저절로 이어져요.' : '한동안 쓰지 않았거나 맥이 잠자기에 들어가면 엔진이 쉬어요.<br><b>Dock이나 응용 프로그램 폴더에서 MSROAD를 다시 열면</b> 이 창이 저절로 이어져요.'}</p>
       <div class="offline-wait"><i></i>다시 연결되기를 기다리는 중</div>
     </div>`;
   document.body.append(el);

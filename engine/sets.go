@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -278,7 +279,21 @@ func (a *App) handlePrintOpen(w http.ResponseWriter, r *http.Request) {
 			exec.Command("/usr/bin/open", p).Start()
 		}
 	}
-	writeJSON(w, map[string]any{"ok": true})
+	// Windows: 화면이 이 주소를 새 창으로 열면 Edge · Chrome 의 PDF 보기에서 바로 인쇄할 수 있어요
+	writeJSON(w, map[string]any{"ok": true, "url": "/api/print/file?path=" + url.QueryEscape(p) + "&t=" + a.token})
+}
+
+// handlePrintFile: 만든 PDF 를 브라우저 창으로 보여 줘요 (Windows 인쇄)
+func (a *App) handlePrintFile(w http.ResponseWriter, r *http.Request) {
+	p, ok := a.printFile(r.URL.Query().Get("path"))
+	if !ok {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", "inline; filename*=UTF-8''"+url.PathEscape(filepath.Base(p)))
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeFile(w, r, p)
 }
 
 // handlePrintSave: 앱 껍데기 없이 열린 경우의 PDF 저장 — 저장 위치를 묻고 복사해요.
@@ -286,6 +301,7 @@ func (a *App) handlePrintSave(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Path string `json:"path"`
 		Name string `json:"name"`
+		Dir  string `json:"dir"` // Windows: 화면 안에서 고른 폴더
 	}
 	readJSON(r, &in)
 	p, ok := a.printFile(in.Path)
@@ -295,7 +311,13 @@ func (a *App) handlePrintSave(w http.ResponseWriter, r *http.Request) {
 	}
 	name := safePDFName(in.Name)
 	var dest string
-	if t := env("TEST_SAVE_DIR"); t != "" {
+	if in.Dir != "" {
+		if !dirExists(in.Dir) {
+			jsonError(w, 400, "저장할 폴더를 찾지 못했어요")
+			return
+		}
+		dest = uniquePath(filepath.Join(in.Dir, name))
+	} else if t := env("TEST_SAVE_DIR"); t != "" {
 		dest = filepath.Join(t, name)
 	} else if runtime.GOOS == "darwin" {
 		home, _ := os.UserHomeDir()
@@ -343,10 +365,24 @@ func (a *App) handleRevealFile(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, 404, "파일을 찾지 못했어요")
 		return
 	}
-	if runtime.GOOS == "darwin" {
-		exec.Command("/usr/bin/open", "-R", in.Path).Start()
-	}
+	revealPaths([]string{in.Path})
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+// uniquePath: 같은 이름이 있으면 "이름 (2).pdf" 처럼 바꿔요 (덮어쓰지 않게)
+func uniquePath(p string) string {
+	if !fileExists(p) {
+		return p
+	}
+	ext := filepath.Ext(p)
+	base := strings.TrimSuffix(p, ext)
+	for i := 2; i < 1000; i++ {
+		q := fmt.Sprintf("%s (%d)%s", base, i, ext)
+		if !fileExists(q) {
+			return q
+		}
+	}
+	return p
 }
 
 func copyFile(src, dst string) error {

@@ -305,7 +305,7 @@ func listFiles(root string, sub bool) ([]fileInfo, bool, error) {
 		if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "~$") {
 			return nil
 		}
-		if _, ok := sheetExts[strings.ToLower(filepath.Ext(name))]; !ok {
+		if k, ok := sheetExts[strings.ToLower(filepath.Ext(name))]; !ok || (k == "heic" && noHEIC()) {
 			return nil
 		}
 		info, err := d.Info()
