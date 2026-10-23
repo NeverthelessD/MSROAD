@@ -29,6 +29,9 @@
 - [ ] 실제 Windows PC 에서 확인: SmartScreen, Edge 앱 창, PDF 인쇄 창(Edge PDF 보기) · Ctrl+P, 탐색기 /select, 한글 경로 · OneDrive 폴더
 
 ### 작업 기록
+- 2026-10-23 v1.3.2 (맥 · Windows) — 사용자 요청: 4곡을 **한 줄에 4칸**으로도. set.grid = 'row' (frame 4 일 때만). 틀 열쇠 '1' '2' '3' '4' '4r' '0'
+  (frameKey · fromKey · gridOf(set) · frameLabel · frameShort). 2×2 ↔ 한 줄은 칸 수가 같아서 자리 그대로(reflow 없음). 프리셋에도 grid 저장.
+  틀 고르기 창 카드 6개(그림 조금 작게). 위쪽 도구가 1440px 창에서 한 줄에 들어가도록 간격을 줄이고, 1500px 아래에선 '글자 상자'를 아이콘만.
 - 2026-10-23 v1.3.1 (맥 · Windows) — 사용자 요청: 틀에 **4곡 분할** 추가. 2줄 × 2칸(gridOf: 4 → cols 2 · rows 2, 칸 번호는 왼쪽 위부터 가로로).
   slotsOf · dividersOf(세로 · 가로 구분선) · frameLabel · 틀 고르기 창(카드 5개, 원본 대비 %) · 아이콘(.g4). A3 가로 4곡 = 원본 대비 약 46%.
 - 2026-10-23 v1.3.0 (맥 · Windows) — 사용자 요청: 편집 · 인쇄 페이지 여백에 글자(예: 20261003 금요기도회) + 글자 상자.
