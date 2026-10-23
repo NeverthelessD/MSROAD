@@ -53,6 +53,7 @@ type App struct {
 	thumbs *Thumbs
 	rn     *Renamer
 	upd    *Updater
+	sets   *SetStore
 
 	lastVis  atomic.Int64 // 화면에 보이는 창이 마지막으로 연락한 시각 (같은 시계)
 	lastSeen atomic.Int64 // 마지막 요청 시각 (started 기준 경과 ns, 잠자기 동안은 멈춰 있는 시계)
@@ -120,6 +121,7 @@ func main() {
 	app.thumbs = NewThumbs(support)
 	app.rn = &Renamer{}
 	app.upd = NewUpdater(support)
+	app.sets = NewSetStore(support)
 	go func() { defer recoverLog("startup scan"); app.rescan() }()
 
 	go heartbeat(support)
@@ -415,6 +417,15 @@ func (a *App) routes() http.Handler {
 		}
 	})
 	api("/api/assign", a.handleAssign)
+	// 편집 · 인쇄
+	api("/api/sets", a.handleSets)
+	api("/api/sets/save", a.handleSetSave)
+	api("/api/sets/delete", a.handleSetDelete)
+	api("/api/presets", a.handlePresets)
+	api("/api/print/pdf", a.handlePrintPDF)
+	api("/api/print/open", a.handlePrintOpen)
+	api("/api/print/save", a.handlePrintSave)
+	api("/api/reveal-file", a.handleRevealFile)
 	api("/api/undo", func(w http.ResponseWriter, r *http.Request) {
 		if err := a.rn.Undo(); err != nil {
 			jsonError(w, 400, err.Error())
