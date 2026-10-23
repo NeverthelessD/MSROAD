@@ -314,6 +314,14 @@ body.mode-edit .seg-icons { display: none; }
 .pv-head .btn, .cr-head .btn { display: flex; align-items: center; gap: 7px; }
 
 /* 좁은 창 */
+@media (max-width: 1280px) {
+  .top { grid-template-columns: 212px auto minmax(140px, 1fr) auto; }
+}
+@media (max-width: 1120px) {
+  .mode-seg button { padding: 0 9px; font-size: 12px; }
+  .brand-name { font-size: 16px; }
+  .folder-btn { max-width: 120px; }
+}
 @media (max-width: 1320px) {
   .studio { grid-template-columns: 236px minmax(0, 1fr) 260px; }
   .st-btn span { display: none; }
