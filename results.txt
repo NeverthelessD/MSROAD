@@ -1,0 +1,21 @@
+PASS  A1 앱을 열면 엔진이 준비됨
+PASS  A2 엔진이 Dock 앱 방식으로 켜짐(shell=native)
+PASS  A3 주소가 47917
+PASS  A4 악보 6개를 읽음 (읽은 수: 6)
+PASS  A5 화면이 앱 창(WKWebView)에서 열림
+PASS  A6 엔진이 MSROAD 앱의 자식 (앱 2355 → 지킴이 2365 → 엔진 2367)
+PASS  B1 다시 열기 뒤에도 앱·엔진 그대로
+PASS  C1 엔진 다시 켜짐
+PASS  C2 앱은 그대로
+PASS  P1 배치를 PDF로 만듦
+PASS  P2 맥 인쇄 기능으로 인쇄됨 (파일로 인쇄, 코드 0)
+PASS  P3 세트를 저장하고 다시 읽음
+PASS  P4 인쇄 시험 뒤에도 앱은 1개
+PASS  D1 앱·엔진 모두 꺼짐
+PASS  E1 앱·엔진 모두 꺼짐
+PASS  F1 남은 엔진 없음
+PASS  G1 새로 열린 앱이 엔진을 켬
+PASS  G2 앱이 새로 열림 (2716 → 2745)
+PASS  H1 다시 열린 앱이 엔진을 켬
+PASS  H2 앱 하나만 떠 있음 (1개)
+PASS  H3 끝나면 모두 꺼짐
