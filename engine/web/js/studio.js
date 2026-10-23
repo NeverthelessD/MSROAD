@@ -104,33 +104,86 @@ function visDims(it) {
   return { W, H, vw: W * (1 - c.l - c.r), vh: H * (1 - c.t - c.b), c };
 }
 // 칸 안에서: vis = 보이는 부분(자른 뒤), box = 그림 전체, clip = 실제로 보이는 곳
-function placeIn(it, area) {
-  const { W, H, vw, vh, c } = visDims(it);
-  const fitS = Math.min(area.w / vw, area.h / vh);
-  const s = it.fit === 'fill' ? Math.max(area.w / vw, area.h / vh) : it.fit === 'manual' ? fitS * (it.zoom || 1) : fitS;
+// 크기 방식 (1.2.1~): fit = 칸에 맞추기(비율 그대로) · stretch = 칸 가득 늘리기 · manual = 직접 조절(mrect: 칸 안의 자리, 0~1)
+// 그림은 언제나 칸 안에만 있어요 (칸 밖으로 나가 잘리지 않아요). 가로 · 세로는 따로 늘리거나 줄일 수 있어요.
+function fitRect(it, area) {
+  const { vw, vh } = visDims(it);
+  const s = Math.min(area.w / vw, area.h / vh);
   const w = vw * s, h = vh * s;
-  let x = area.x + (area.w - w) / 2;
-  let y = it.align === 'center' ? area.y + (area.h - h) / 2 : it.align === 'bottom' ? area.y + area.h - h : area.y;
-  if (it.fit !== 'fit') { x += it.ox || 0; y += it.oy || 0; }
-  const vis = { x, y, w, h };
-  return { vis, box: { x: x - c.l * W * s, y: y - c.t * H * s, w: W * s, h: H * s }, clip: inter(vis, area), s, area };
+  const x = area.x + (area.w - w) / 2;
+  const y = it.align === 'center' ? area.y + (area.h - h) / 2 : it.align === 'bottom' ? area.y + area.h - h : area.y;
+  return { x, y, w, h };
+}
+function clampM(m) {
+  const w = clamp(m.w, 0.08, 1), h = clamp(m.h, 0.08, 1);
+  return { w, h, x: clamp(m.x, 0, 1 - w), y: clamp(m.y, 0, 1 - h) };
+}
+function boxFor(it, vis) {
+  const { W, H, vw, vh, c } = visDims(it);
+  const sx = vis.w / vw, sy = vis.h / vh;
+  return { x: vis.x - c.l * W * sx, y: vis.y - c.t * H * sy, w: W * sx, h: H * sy, sx, sy };
+}
+function placeIn(it, area) {
+  let vis;
+  if (it.fit === 'stretch') vis = { ...area };
+  else if (it.fit === 'manual' && it.mrect) {
+    const m = clampM(it.mrect);
+    vis = { x: area.x + m.x * area.w, y: area.y + m.y * area.h, w: m.w * area.w, h: m.h * area.h };
+  } else vis = fitRect(it, area);
+  const b = boxFor(it, vis);
+  const fr = fitRect(it, area);
+  return { vis, box: { x: b.x, y: b.y, w: b.w, h: b.h }, clip: inter(vis, area) || vis, area, px: vis.w / fr.w, py: vis.h / fr.h, fit: fr };
 }
 function placeFree(it, set) {
-  const { W, H, vw, c } = visDims(it);
   const r = it.rect;
-  const s = r.w / vw;
+  const b = boxFor(it, r);
   const { W: PW, H: PH } = paperOf(set);
-  return { vis: r, box: { x: r.x - c.l * W * s, y: r.y - c.t * H * s, w: W * s, h: H * s }, clip: inter(r, { x: 0, y: 0, w: PW, h: PH }), s, area: null };
+  return { vis: r, box: { x: b.x, y: b.y, w: b.w, h: b.h }, clip: inter(r, { x: 0, y: 0, w: PW, h: PH }), area: null };
 }
 function placeOf(set, it) {
   if (!set.frame) return placeFree(it, set);
   const sl = slotsOf(set)[it.slot];
   return sl ? placeIn(it, sl.img) : null;
 }
-function fixFreeAspect(it) {
+// 지금 보이는 자리를 '직접 조절' 자리로 (칸 안의 비율)
+function toManual(it, area) {
+  if (it.fit === 'manual' && it.mrect) return;
+  const v = placeIn(it, area).vis;
+  it.mrect = clampM({ x: (v.x - area.x) / area.w, y: (v.y - area.y) / area.h, w: v.w / area.w, h: v.h / area.h });
+  it.fit = 'manual';
+}
+// 비율이 원본과 얼마나 다른지 (1 = 원본 비율)
+function stretchOf(it, vis) {
+  const { vw, vh } = visDims(it);
+  return (vis.h / vis.w) / (vh / vw);
+}
+// 자유 배치: 자르기를 바꾸면 늘린 정도는 그대로 두고 높이를 맞춰요
+function fixFreeAspect(it, keep = 1) {
   if (!it.rect) return;
   const { vw, vh } = visDims(it);
-  it.rect.h = it.rect.w * vh / vw;
+  it.rect.h = it.rect.w * vh / vw * keep;
+}
+// 1.2.0 의 '칸 채우기' · 확대(칸 밖은 가림)를 같은 모습의 '자르기 + 직접 조절'로 바꿔요
+function migrateItem(it, area) {
+  if (!area || it.fit === 'fit' || it.fit === 'stretch' || it.mrect) { delete it.zoom; delete it.ox; delete it.oy; return; }
+  const { W, H, vw, vh, c } = visDims(it);
+  const fitS = Math.min(area.w / vw, area.h / vh);
+  const sc = it.fit === 'fill' ? Math.max(area.w / vw, area.h / vh) : fitS * (it.zoom || 1);
+  const w = vw * sc, h = vh * sc;
+  let x = area.x + (area.w - w) / 2 + (it.ox || 0);
+  let y = (it.align === 'center' ? area.y + (area.h - h) / 2 : it.align === 'bottom' ? area.y + area.h - h : area.y) + (it.oy || 0);
+  const box = { x: x - c.l * W * sc, y: y - c.t * H * sc, w: W * sc, h: H * sc };
+  const clip = inter({ x, y, w, h }, area);
+  delete it.zoom; delete it.ox; delete it.oy;
+  if (!clip) { it.fit = 'fit'; return; }
+  it.crop = { l: (clip.x - box.x) / box.w, t: (clip.y - box.y) / box.h, r: (box.x + box.w - clip.x - clip.w) / box.w, b: (box.y + box.h - clip.y - clip.h) / box.h };
+  it.mrect = clampM({ x: (clip.x - area.x) / area.w, y: (clip.y - area.y) / area.h, w: clip.w / area.w, h: clip.h / area.h });
+  it.fit = 'manual';
+}
+function migrateSet(set) {
+  if (!set?.frame) return;
+  const slots = slotsOf(set);
+  for (const p of set.pages) for (const it of p.items) migrateItem(it, slots[it.slot]?.img);
 }
 
 // ══════════════════════════════════════════════════════ 악보 찾기
@@ -302,7 +355,7 @@ function makeItem(s, part) {
   return {
     id: rid(8),
     ref: { id: s.id, file: part.file, pdf: part.pdf, w: part.w, h: part.h, title: s.title, chord: s.chord, dir: s.dir, song: s.song, part: part.part, parts: part.parts },
-    fit: 'fit', zoom: 1, ox: 0, oy: 0, align: 'top', crop: { ...NOCROP },
+    fit: 'fit', align: 'top', lock: true, crop: { ...NOCROP },
   };
 }
 // at: { page, slot } (틀) · { page, x, y } (자유, mm) · null (빈 칸 끝에)
@@ -369,9 +422,9 @@ function reflow(set, oldFrame) {
     // 틀 → 자유 배치: 지금 보이는 자리 그대로
     const tmp = { ...set, frame: oldFrame };
     for (const p of set.pages) for (const it of p.items) {
-      const pl = placeIn({ ...it, fit: 'fit' }, slotsOf(tmp)[it.slot]?.img || contentOf(set));
+      const pl = placeIn(it, slotsOf(tmp)[it.slot]?.img || contentOf(set));
       it.rect = { ...pl.vis };
-      delete it.slot;
+      delete it.slot; delete it.mrect;
     }
     return;
   }
@@ -380,7 +433,7 @@ function reflow(set, oldFrame) {
   all.forEach((it, k) => {
     it.slot = k % set.frame;
     delete it.rect;
-    if (!oldFrame) { it.fit = 'fit'; it.zoom = 1; it.ox = 0; it.oy = 0; }
+    if (!oldFrame) { it.fit = 'fit'; delete it.mrect; }
     set.pages[Math.floor(k / set.frame)].items.push(it);
   });
 }
@@ -392,7 +445,6 @@ function setOption(key, val) {
       reflow(set, old);
       E.page = 0;
     }
-    if (!set.frame) for (const p of set.pages) for (const it of p.items) fixFreeAspect(it);
   });
 }
 
@@ -612,7 +664,7 @@ function drawSelection() {
   const sel = document.createElement('div');
   sel.className = 'sel-box' + (E.set.frame ? '' : ' free');
   Object.assign(sel.style, { left: r.x * K + 'px', top: r.y * K + 'px', width: r.w * K + 'px', height: r.h * K + 'px' });
-  sel.innerHTML = ['nw', 'ne', 'sw', 'se'].map((h) => `<i class="hd ${h}" data-h="${h}"></i>`).join('');
+  sel.innerHTML = ['nw', 'ne', 'sw', 'se', 'n', 's', 'w', 'e'].map((h) => `<i class="hd ${h}" data-h="${h}" title="${h.length === 2 ? '크기 바꾸기' : h === 'n' || h === 's' ? '세로만 늘리기 · 줄이기' : '가로만 늘리기 · 줄이기'}"></i>`).join('');
   pg.append(sel);
   const s = sheetOf(f.it.ref);
   const others = s ? versionsOf(s).filter((v) => v.id !== s.id) : [];
@@ -635,7 +687,7 @@ root.addEventListener('click', (e) => {
   if (!f) return;
   if (m === 'remove') removeItem(f.it.id);
   if (m === 'crop') openCrop(f.it.id);
-  if (m === 'fit') commit(() => { Object.assign(f.it, { fit: 'fit', zoom: 1, ox: 0, oy: 0 }); });
+  if (m === 'fit') commit(() => { f.it.fit = 'fit'; delete f.it.mrect; });
   if (m === 'key') keyMenu(e.target.closest('button'), f.it);
 });
 function keyMenu(btn, it) {
@@ -655,9 +707,10 @@ function keyMenu(btn, it) {
     let parts;
     try { parts = await partsOf(v); } catch { return; }
     const part = parts[Math.min(parts.length - 1, (it.ref.part || 1) - 1)];
+    const keep = it.rect ? stretchOf(it, it.rect) : 1;
     commit(() => {
       Object.assign(it.ref, { id: v.id, file: part.file, pdf: part.pdf, w: part.w, h: part.h, title: v.title, chord: v.chord, dir: v.dir, song: v.song, part: part.part, parts: part.parts });
-      fixFreeAspect(it);
+      fixFreeAspect(it, keep);
     });
     toast(`${esc(v._prep.norm)} ${v.chord ? plate(v.chord) : ''} 로 바꿨어요`);
   };
@@ -719,17 +772,30 @@ function renderProps() {
     const pg = sh?.pages[it.ref.file];
     const c = it.crop || NOCROP;
     const cropped = c.l + c.t + c.r + c.b > 0.001;
-    const pct = Math.round((it.fit === 'manual' ? it.zoom : it.fit === 'fill' ? (placeOf(s, it)?.s || 1) / (placeIn({ ...it, fit: 'fit' }, slotsOf(s)[it.slot]?.img || contentOf(s)).s || 1) : 1) * 100);
+    const pl = placeOf(s, it);
     h += `<div class="pp-sec"><span class="pp-lbl">고른 악보</span>
         <div class="pp-title"><b>${esc(it.ref.title)}</b>${it.ref.chord ? plate(it.ref.chord) : ''}</div>
         <span class="muted small">${pg ? esc(pg.name) : '파일을 찾을 수 없어요'}${it.ref.parts > 1 ? ` · ${it.ref.parts}장 중 ${it.ref.part}장` : ''}${it.ref.pdf ? ` · ${it.ref.pdf}쪽` : ''}</span></div>`;
-    if (s.frame) {
-      h += `<div class="pp-sec"><span class="pp-h">크기</span>
-          <div class="seg full" data-item="fit"><button data-v="fit" class="${it.fit === 'fit' ? 'on' : ''}">칸에 맞추기</button><button data-v="fill" class="${it.fit === 'fill' ? 'on' : ''}">칸 채우기</button><button data-v="manual" class="${it.fit === 'manual' ? 'on' : ''}">직접 조절</button></div>
-          <div class="pp-zoom"><button data-izoom="-" aria-label="축소">−</button><input type="range" min="30" max="400" step="1" value="${clamp(pct, 30, 400)}" id="ppZoom" aria-label="확대 · 축소"><button data-izoom="+" aria-label="확대">+</button><b id="ppZoomTxt">${pct}%</b></div>
-          <span class="muted small">${it.fit === 'fit' ? '악보를 끌어 다른 칸으로 옮길 수 있어요.' : '칸 밖으로 나간 부분은 가려져요. 악보를 끌어 위치를 옮겨요.'} 트랙패드를 오므리거나 벌려도 크기가 바뀌어요.</span></div>`;
-    } else {
-      h += `<div class="pp-sec"><span class="pp-h">크기</span><span class="muted small">모서리를 끌어 크기를 바꾸고, 가운데를 끌어 옮겨요. 크기 ${Math.round(it.rect.w)} × ${Math.round(it.rect.h)} mm</span></div>`;
+    const lock = it.lock !== false;
+    const bent = pl ? Math.abs(stretchOf(it, pl.vis) - 1) > 0.01 : false;
+    const sizeRow = (ax, label, val, min, max, unit) => `<div class="pp-size"><span>${label}</span><button data-isz="${ax}-" aria-label="${label} 줄이기">−</button><input type="range" min="${min}" max="${max}" step="1" value="${clamp(val, min, max)}" data-szr="${ax}" aria-label="${label} 크기"><button data-isz="${ax}+" aria-label="${label} 늘리기">+</button><b data-szt="${ax}">${val}${unit}</b></div>`;
+    const lockRow = `<div class="pp-lock"><button class="lk ${lock ? 'on' : ''}" data-lock aria-pressed="${lock}">${lock ? '🔗 비율 유지' : '↔︎ 가로 · 세로 따로'}</button>${bent ? '<button class="btn ghost small-btn" data-pp="ratio">원래 비율로</button>' : ''}</div>`;
+    if (s.frame && pl) {
+      const a = pl.area, fr = pl.fit;
+      const pw = Math.round(pl.px * 100), ph = Math.round(pl.py * 100);
+      h += `<div class="pp-sec"><span class="pp-h">크기 <small class="muted">칸은 그대로, 악보만 커지거나 작아져요</small></span>
+          <div class="seg full" data-item="fit"><button data-v="fit" class="${it.fit === 'fit' ? 'on' : ''}">칸에 맞추기</button><button data-v="stretch" class="${it.fit === 'stretch' ? 'on' : ''}">칸 가득 늘리기</button><button data-v="manual" class="${it.fit === 'manual' ? 'on' : ''}">직접 조절</button></div>
+          ${sizeRow('w', '가로', pw, 15, Math.max(100, Math.ceil(a.w / fr.w * 100)), '%')}
+          ${sizeRow('h', '세로', ph, 15, Math.max(100, Math.ceil(a.h / fr.h * 100)), '%')}
+          ${lockRow}
+          <span class="muted small">칸 밖으로는 나가지 않아요. 모서리를 끌면 크기, 가장자리를 끌면 가로나 세로만 바뀌어요. ${it.fit === 'manual' ? '악보를 끌어 칸 안에서 옮겨요.' : '악보를 끌어 다른 칸으로 옮길 수 있어요.'}</span></div>`;
+    } else if (pl) {
+      const { W: PW, H: PH } = paperOf(s);
+      h += `<div class="pp-sec"><span class="pp-h">크기 <small class="muted">mm</small></span>
+          ${sizeRow('w', '가로', Math.round(it.rect.w), 20, Math.round(PW), '')}
+          ${sizeRow('h', '세로', Math.round(it.rect.h), 20, Math.round(PH), '')}
+          ${lockRow}
+          <span class="muted small">모서리를 끌면 크기, 가장자리를 끌면 가로나 세로만 바뀌어요. 가운데를 끌어 옮겨요.</span></div>`;
     }
     h += `<div class="pp-sec"><span class="pp-h">자르기</span>
         <button class="btn wide" data-pp="crop">${I.crop}자르기 열기</button>
@@ -755,19 +821,71 @@ function renderProps() {
   const nm = $('#ppName');
   nm.addEventListener('change', () => { const v = nm.value.trim() || s.name; commit((set) => { set.name = v; }); });
   nm.addEventListener('keydown', (e) => { if (e.key === 'Enter') nm.blur(); });
-  const zr = $('#ppZoom');
-  if (zr && f) {
+  if (f) {
     let started = false;
-    zr.addEventListener('input', () => {
-      if (!started) { started = true; E.hist.push(snapshot()); E.fut = []; }
-      f.it.fit = 'manual';
-      f.it.zoom = Number(zr.value) / 100;
-      $('#ppZoomTxt').textContent = zr.value + '%';
-      renderStage();
-      scheduleSave();
-      $$('#stProps [data-item="fit"] button').forEach((b) => b.classList.toggle('on', b.dataset.v === 'manual'));
+    $$('#stProps [data-szr]').forEach((r) => {
+      r.addEventListener('input', () => {
+        if (!started) { started = true; E.hist.push(snapshot()); E.fut = []; }
+        setSize(f.it, r.dataset.szr, Number(r.value));
+        renderStage();
+        scheduleSave();
+        syncSizeUI(f.it);
+      });
+      r.addEventListener('change', () => { started = false; renderAll(); });
     });
-    zr.addEventListener('change', () => { started = false; renderAll(); });
+  }
+}
+// 슬라이더 숫자만 새로 (다시 그리면 끌던 슬라이더가 끊겨요)
+function syncSizeUI(it) {
+  const pl = placeOf(E.set, it);
+  if (!pl) return;
+  const vals = E.set.frame ? { w: Math.round(pl.px * 100), h: Math.round(pl.py * 100) } : { w: Math.round(it.rect.w), h: Math.round(it.rect.h) };
+  const unit = E.set.frame ? '%' : '';
+  for (const ax of ['w', 'h']) {
+    const t = $(`#stProps [data-szt="${ax}"]`); if (t) t.textContent = vals[ax] + unit;
+    const r = $(`#stProps [data-szr="${ax}"]`); if (r && document.activeElement !== r) r.value = vals[ax];
+  }
+  $$('#stProps [data-item="fit"] button').forEach((b) => b.classList.toggle('on', b.dataset.v === it.fit));
+}
+// 가로(w) · 세로(h) 크기를 바꿔요. 틀: 맞춤 크기 대비 %, 자유 배치: mm. 비율 유지면 둘 다 같이, 늘 칸 · 용지 안에서.
+function setSize(it, ax, val) {
+  const lock = it.lock !== false;
+  if (E.set.frame) {
+    const area = slotsOf(E.set)[it.slot].img;
+    toManual(it, area);
+    const fr = fitRect(it, area);
+    const m = it.mrect;
+    const cur = ax === 'w' ? m.w : m.h;
+    const want = ax === 'w' ? val / 100 * fr.w / area.w : val / 100 * fr.h / area.h;
+    const cx = m.x + m.w / 2, cy = m.y + m.h / 2;
+    if (lock) {
+      const r = Math.min(want / cur, 1 / m.w, 1 / m.h);
+      m.w *= r; m.h *= r;
+    } else if (ax === 'w') m.w = Math.min(1, want); else m.h = Math.min(1, want);
+    it.mrect = clampM({ ...m, x: cx - m.w / 2, y: cy - m.h / 2 });
+    return;
+  }
+  const r0 = it.rect;
+  const cx = r0.x + r0.w / 2, cy = r0.y + r0.h / 2;
+  let w = r0.w, h = r0.h;
+  if (lock) { const f = val / (ax === 'w' ? r0.w : r0.h); w *= f; h *= f; } else if (ax === 'w') w = val; else h = val;
+  w = Math.max(10, w); h = Math.max(10, h);
+  it.rect = { x: cx - w / 2, y: cy - h / 2, w, h };
+}
+// 비율 그대로 몇 배로 (−/+ 버튼 · 트랙패드 오므리기)
+function scaleSel(it, f) {
+  if (E.set.frame) {
+    const area = slotsOf(E.set)[it.slot].img;
+    toManual(it, area);
+    const m = it.mrect;
+    const r = Math.min(f, 1 / m.w, 1 / m.h);
+    const cx = m.x + m.w / 2, cy = m.y + m.h / 2;
+    it.mrect = clampM({ w: m.w * r, h: m.h * r, x: cx - m.w * r / 2, y: cy - m.h * r / 2 });
+  } else {
+    const r = it.rect;
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    const w = Math.max(10, r.w * f), h = Math.max(10, r.h * f);
+    it.rect = { x: cx - w / 2, y: cy - h / 2, w, h };
   }
 }
 root.addEventListener('click', (e) => {
@@ -778,35 +896,44 @@ root.addEventListener('click', (e) => {
     if (!v) return;
     commit(() => {
       if (item.dataset.item === 'fit') {
-        if (v === 'manual' && it.fit !== 'manual') {
-          const pl = placeOf(E.set, it), base = placeIn({ ...it, fit: 'fit' }, pl.area);
-          it.zoom = pl.s / base.s; // 지금 크기에서 이어서 조절
-        }
-        if (v === 'fit') { it.zoom = 1; it.ox = 0; it.oy = 0; }
-        if (v === 'fill') { it.ox = 0; it.oy = 0; }
-        it.fit = v;
+        const area = slotsOf(E.set)[it.slot].img;
+        if (v === 'manual') toManual(it, area); // 지금 크기에서 이어서 조절
+        else { it.fit = v; delete it.mrect; }
+      } else if (item.dataset.item === 'align') {
+        it.align = v;
+        if (it.fit === 'manual' && it.mrect) it.mrect.y = v === 'top' ? 0 : v === 'bottom' ? 1 - it.mrect.h : (1 - it.mrect.h) / 2;
       } else it[item.dataset.item] = v;
     });
     return;
   }
-  const iz = e.target.closest('[data-izoom]')?.dataset.izoom;
-  if (iz && it) { zoomItem(it, iz === '+' ? 1.1 : 1 / 1.1); return; }
+  const isz = e.target.closest('[data-isz]')?.dataset.isz;
+  if (isz && it) {
+    const ax = isz[0], up = isz[1] === '+';
+    const pl = placeOf(E.set, it);
+    const cur = E.set.frame ? Math.round((ax === 'w' ? pl.px : pl.py) * 100) : Math.round(ax === 'w' ? it.rect.w : it.rect.h);
+    const step = E.set.frame ? 5 : 5;
+    commit(() => setSize(it, ax, Math.max(E.set.frame ? 15 : 10, cur + (up ? step : -step))));
+    return;
+  }
+  if (e.target.closest('[data-lock]') && it) { commit(() => { it.lock = it.lock === false; }); return; }
   const pp = e.target.closest('[data-pp]')?.dataset.pp;
   if (pp === 'crop' && it) openCrop(it.id);
-  if (pp === 'uncrop' && it) commit(() => { it.crop = { ...NOCROP }; fixFreeAspect(it); });
+  if (pp === 'uncrop' && it) commit(() => { const keep = it.rect ? stretchOf(it, it.rect) : 1; it.crop = { ...NOCROP }; fixFreeAspect(it, keep); if (it.fit === 'manual') { it.fit = 'fit'; delete it.mrect; } });
+  if (pp === 'ratio' && it) commit(() => restoreRatio(it));
   const tg = e.target.closest('[data-tg]');
   if (tg && !tg.disabled) commit((set) => { set[tg.dataset.tg] = !set[tg.dataset.tg]; });
 });
-function zoomItem(it, f, push = true) {
-  const fn = () => {
-    if (it.fit !== 'manual') {
-      const pl = placeOf(E.set, it), base = placeIn({ ...it, fit: 'fit' }, pl.area);
-      it.zoom = pl.s / base.s;
-      it.fit = 'manual';
-    }
-    it.zoom = clamp(it.zoom * f, 0.3, 4);
-  };
-  if (push) commit(fn); else { fn(); renderStage(); renderPropsSoon(); scheduleSave(); }
+// 원래 비율로 (가로는 두고 세로를 맞춰요. 칸을 넘치면 둘 다 줄여요)
+function restoreRatio(it) {
+  const { vw, vh } = visDims(it);
+  if (E.set.frame) {
+    const area = slotsOf(E.set)[it.slot].img;
+    toManual(it, area);
+    const m = it.mrect;
+    let w = m.w, h = m.w * area.w * vh / vw / area.h;
+    if (h > 1) { w = w / h; h = 1; }
+    it.mrect = clampM({ x: m.x, y: m.y, w, h });
+  } else fixFreeAspect(it);
 }
 let propsT;
 function renderPropsSoon() { clearTimeout(propsT); propsT = setTimeout(renderProps, 120); }
@@ -925,26 +1052,41 @@ root.addEventListener('pointerdown', (e) => {
   const before = snapshot();
   const pushOnce = () => { if (E.hist[E.hist.length - 1] !== before) { E.hist.push(before); E.fut = []; } };
   if (!E.set.frame) {
-    // 자유 배치: 옮기기 · 모서리로 크기 (비율 유지)
+    // 자유 배치: 옮기기 · 모서리(비율 유지 켜면 비율 그대로) · 가장자리(가로나 세로만)
     const r0 = { ...it.rect };
-    const { vw, vh } = visDims(it);
-    const ratio = vh / vw;
     trackPointer(e, {
       threshold: 2,
       onMove: (ev, dx, dy) => {
         pushOnce();
         const mx = dx / K, my = dy / K;
-        if (hd) {
-          const h = hd.dataset.h;
-          let w = r0.w + (h.includes('e') ? mx : -mx);
-          w = Math.max(20, w);
-          const hh = w * ratio;
-          it.rect = { w, h: hh, x: h.includes('w') ? r0.x + r0.w - w : r0.x, y: h.includes('n') ? r0.y + r0.h - hh : r0.y };
-        } else {
+        if (hd) it.rect = resizeRect(r0, hd.dataset.h, mx, my, it.lock !== false, null);
+        else {
           const { W, H } = paperOf(E.set);
           it.rect = { ...r0, x: clamp(r0.x + mx, -r0.w * 0.8, W - r0.w * 0.2), y: clamp(r0.y + my, -r0.h * 0.8, H - r0.h * 0.2) };
         }
         renderStage();
+        syncSizeUI(it);
+      },
+      onEnd: (ev, moved) => { if (moved) { scheduleSave(); renderAll(); } },
+    });
+    return;
+  }
+  const area = slotsOf(E.set)[it.slot].img;
+  if (hd || it.fit === 'manual') {
+    // 틀: 칸 안에서만 크기 · 위치 바꾸기 (칸 밖으로는 나가지 않아요)
+    let r0f = null;
+    trackPointer(e, {
+      threshold: 2,
+      onMove: (ev, dx, dy) => {
+        pushOnce();
+        toManual(it, area);
+        if (!r0f) r0f = placeIn(it, area).vis;
+        const mx = dx / K, my = dy / K;
+        const r = hd ? resizeRect(r0f, hd.dataset.h, mx, my, it.lock !== false, area)
+          : { ...r0f, x: clamp(r0f.x + mx, area.x, area.x + area.w - r0f.w), y: clamp(r0f.y + my, area.y, area.y + area.h - r0f.h) };
+        it.mrect = clampM({ x: (r.x - area.x) / area.w, y: (r.y - area.y) / area.h, w: r.w / area.w, h: r.h / area.h });
+        renderStage();
+        syncSizeUI(it);
       },
       onEnd: (ev, moved) => { if (moved) { scheduleSave(); renderAll(); } },
     });
@@ -986,27 +1128,29 @@ root.addEventListener('pointerdown', (e) => {
     });
     return;
   }
-  // 틀 + 칸 채우기 · 직접 조절: 끌어서 보이는 위치 옮기기, 모서리로 확대 · 축소
-  const o0 = { ox: it.ox || 0, oy: it.oy || 0, zoom: it.zoom || 1 };
-  trackPointer(e, {
-    threshold: 2,
-    onMove: (ev, dx, dy) => {
-      pushOnce();
-      if (hd) {
-        if (it.fit !== 'manual') { const pl = placeOf(E.set, it), base = placeIn({ ...it, fit: 'fit' }, pl.area); it.zoom = pl.s / base.s; o0.zoom = it.zoom; it.fit = 'manual'; }
-        const h = hd.dataset.h;
-        const d = ((h.includes('e') ? dx : -dx) + (h.includes('s') ? dy : -dy)) / 2;
-        const pl = placeOf(E.set, it);
-        it.zoom = clamp(o0.zoom * (1 + d / Math.max(60, pl.vis.w * K)), 0.3, 4);
-      } else {
-        it.ox = o0.ox + dx / K;
-        it.oy = o0.oy + dy / K;
-      }
-      renderStage();
-    },
-    onEnd: (ev, moved) => { if (moved) { scheduleSave(); renderAll(); } },
-  });
 });
+// 손잡이로 크기 바꾸기: 반대쪽을 고정하고, 모서리는 (비율 유지면) 비율 그대로, 가장자리는 한 방향만. B = 넘지 못하는 칸
+function resizeRect(r0, h, dx, dy, lock, B) {
+  const MIN = 8;
+  if (lock && h.length === 2) {
+    const ax = h.includes('w') ? r0.x + r0.w : r0.x, ay = h.includes('n') ? r0.y + r0.h : r0.y;
+    let sc = ((r0.w + (h.includes('e') ? dx : -dx)) / r0.w + (r0.h + (h.includes('s') ? dy : -dy)) / r0.h) / 2;
+    sc = Math.max(sc, MIN / Math.min(r0.w, r0.h));
+    if (B) {
+      const aw = h.includes('e') ? B.x + B.w - ax : ax - B.x, ah = h.includes('s') ? B.y + B.h - ay : ay - B.y;
+      sc = Math.min(sc, aw / r0.w, ah / r0.h);
+    }
+    const w = r0.w * sc, hh = r0.h * sc;
+    return { x: h.includes('w') ? ax - w : ax, y: h.includes('n') ? ay - hh : ay, w, h: hh };
+  }
+  let x0 = r0.x, y0 = r0.y, x1 = r0.x + r0.w, y1 = r0.y + r0.h;
+  if (h.includes('w')) x0 = Math.min(x1 - MIN, x0 + dx);
+  if (h.includes('e')) x1 = Math.max(x0 + MIN, x1 + dx);
+  if (h.includes('n')) y0 = Math.min(y1 - MIN, y0 + dy);
+  if (h.includes('s')) y1 = Math.max(y0 + MIN, y1 + dy);
+  if (B) { x0 = Math.max(B.x, x0); y0 = Math.max(B.y, y0); x1 = Math.min(B.x + B.w, x1); y1 = Math.min(B.y + B.h, y1); }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
 // 트랙패드 오므리기 · 벌리기 (⌘ · ctrl + 휠) 로 고른 악보 확대 · 축소
 let wheelPush = 0;
 root.addEventListener('wheel', (e) => {
@@ -1016,16 +1160,8 @@ root.addEventListener('wheel', (e) => {
   e.preventDefault();
   if (Date.now() - wheelPush > 800) { E.hist.push(snapshot()); E.fut = []; }
   wheelPush = Date.now();
-  if (!E.set.frame) {
-    const it = f.it;
-    const cx = it.rect.x + it.rect.w / 2, cy = it.rect.y + it.rect.h / 2;
-    const w = clamp(it.rect.w * Math.exp(-e.deltaY * 0.01), 20, 2000);
-    const h = w * it.rect.h / it.rect.w;
-    it.rect = { x: cx - w / 2, y: cy - h / 2, w, h };
-    renderStage(); scheduleSave(); renderPropsSoon();
-    return;
-  }
-  zoomItem(f.it, Math.exp(-e.deltaY * 0.01), false);
+  scaleSel(f.it, clamp(Math.exp(-e.deltaY * 0.01), 0.85, 1.18));
+  renderStage(); scheduleSave(); syncSizeUI(f.it);
 }, { passive: false });
 addEventListener('resize', () => { if (E.active) { renderStage(); renderStrip(); if (E.layer === 'preview') renderPreview(); if (E.layer === 'crop') drawCrop(); } });
 
@@ -1070,7 +1206,9 @@ function renderSets() {
     const k = Math.min(200 / W, 150 / H);
     const th = document.createElement('div');
     th.className = 'sc-th';
-    th.append(pageDOM(set, 0, k, { static: true, q: 'thumb' }));
+    const view = JSON.parse(JSON.stringify(set));
+    migrateSet(view);
+    th.append(pageDOM(view, 0, k, { static: true, q: 'thumb' }));
     th.insertAdjacentHTML('beforeend', `<span class="sc-pages">${set.pages.length}쪽</span>`);
     card.append(th);
     const songs = songsOf(set);
@@ -1162,6 +1300,7 @@ function openSet(id) {
   if (!set) return;
   if (E.set && E.saving) saveNow();
   E.set = JSON.parse(JSON.stringify(set));
+  migrateSet(E.set);
   E.page = 0; E.sel = null; E.hist = []; E.fut = []; E.zoom = 1;
   E.print.name = '';
   resolveRefs();
@@ -1292,8 +1431,10 @@ function drawCrop() {
   // 칸에 들어갈 모습 (지금 페이지를 작게)
   const tmp = JSON.parse(JSON.stringify(E.set));
   const t = tmp.pages[f.page].items.find((x) => x.id === f.it.id);
+  const keep = t.rect ? stretchOf(f.it, f.it.rect) : 1;
   t.crop = { ...c };
-  fixFreeAspect(t);
+  if (t.fit === 'manual') { t.fit = 'fit'; delete t.mrect; }
+  fixFreeAspect(t, keep);
   const { W: PW, H: PH } = paperOf(tmp);
   const k = Math.min(250 / PW, 150 / PH);
   const prev = $('#crPrev');
@@ -1307,7 +1448,12 @@ function applyCrop() {
   const f = findItem(E.crop?.id);
   if (!f) return closeLayer();
   const c = E.crop.c;
-  commit(() => { f.it.crop = { ...c }; if (E.set.frame && f.it.fit !== 'fit') { f.it.ox = 0; f.it.oy = 0; } fixFreeAspect(f.it); }, { render: false });
+  commit(() => {
+    const keep = f.it.rect ? stretchOf(f.it, f.it.rect) : 1;
+    f.it.crop = { ...c };
+    if (E.set.frame && f.it.fit === 'manual') { f.it.fit = 'fit'; delete f.it.mrect; }
+    fixFreeAspect(f.it, keep);
+  }, { render: false });
   closeLayer();
 }
 $('#studio').addEventListener('click', (e) => {
@@ -1583,7 +1729,7 @@ export async function setMode(mode) {
   }
   if (!root.firstChild) shell();
   try { if (!E.loaded) await loadSets(); } catch (e) { toast('⚠️ ' + esc(e.message)); }
-  if (!E.set && E.sets.length) { E.set = JSON.parse(JSON.stringify(E.sets[0])); resolveRefs(); }
+  if (!E.set && E.sets.length) { E.set = JSON.parse(JSON.stringify(E.sets[0])); migrateSet(E.set); resolveRefs(); }
   renderAll();
   if (!E.set) { openSets(); if (!E.sets.length) openFrames(); }
 }

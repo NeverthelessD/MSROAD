@@ -104,6 +104,10 @@ body.mode-edit .seg-icons { display: none; }
 .sel-box .hd { position: absolute; width: 11px; height: 11px; background: #fff; border: 2px solid var(--brand); border-radius: 3px; pointer-events: auto; }
 .sel-box .hd.nw { left: -8px; top: -8px; cursor: nwse-resize; } .sel-box .hd.se { right: -8px; bottom: -8px; cursor: nwse-resize; }
 .sel-box .hd.ne { right: -8px; top: -8px; cursor: nesw-resize; } .sel-box .hd.sw { left: -8px; bottom: -8px; cursor: nesw-resize; }
+.sel-box .hd.n, .sel-box .hd.s { left: 50%; width: 26px; height: 9px; margin-left: -13px; border-radius: 5px; cursor: ns-resize; }
+.sel-box .hd.n { top: -7px; } .sel-box .hd.s { bottom: -7px; }
+.sel-box .hd.w, .sel-box .hd.e { top: 50%; height: 26px; width: 9px; margin-top: -13px; border-radius: 5px; cursor: ew-resize; }
+.sel-box .hd.w { left: -7px; } .sel-box .hd.e { right: -7px; }
 .st-mini { position: absolute; z-index: 5; display: flex; gap: 2px; padding: 4px; border-radius: 11px; background: #1c1b2c; box-shadow: 0 8px 24px rgba(0,0,0,.28); white-space: nowrap; }
 .st-mini button { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: #f1f0fa; cursor: pointer; font-size: 12.5px; font-weight: 650; }
 .st-mini button:hover { background: rgba(255,255,255,.1); }
@@ -131,7 +135,7 @@ body.mode-edit .seg-icons { display: none; }
 .st-thumb .del { position: absolute; right: -7px; top: -7px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--text); color: var(--panel); display: none; place-items: center; cursor: pointer; padding: 0; }
 .st-thumb .del svg { width: 9px; height: 9px; }
 .st-thumb:hover .del { display: grid; }
-.st-addpage { flex: none; border-radius: 4px; border: 1.5px dashed var(--line2); background: none; color: var(--muted); font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.st-addpage { flex: none; min-width: 64px; border-radius: 4px; border: 1.5px dashed var(--line2); background: none; color: var(--muted); font-size: 11.5px; font-weight: 700; cursor: pointer; }
 .st-addpage:hover, .st-addpage.drop { border-color: var(--brand); color: var(--brand); }
 
 /* 오른쪽 설정 */
@@ -144,10 +148,15 @@ body.mode-edit .seg-icons { display: none; }
 .pp-rule { height: 1px; background: var(--line); flex: none; }
 .seg.full { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
 .seg.full button { height: 30px; font-size: 12px; }
-.pp-zoom { display: flex; align-items: center; gap: 8px; }
-.pp-zoom button { width: 26px; height: 26px; border: 0; border-radius: 7px; background: var(--sunken); cursor: pointer; font-size: 14px; flex: none; }
-.pp-zoom input { flex: 1; min-width: 0; accent-color: var(--brand); }
-.pp-zoom b { width: 42px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pp-h small { font-weight: 500; font-size: 11px; margin-left: 4px; }
+.pp-size { display: flex; align-items: center; gap: 7px; }
+.pp-size > span { width: 26px; flex: none; font-size: 12px; font-weight: 700; color: var(--muted); }
+.pp-size button { width: 24px; height: 24px; border: 0; border-radius: 7px; background: var(--sunken); cursor: pointer; font-size: 14px; flex: none; }
+.pp-size input { flex: 1; min-width: 0; accent-color: var(--brand); }
+.pp-size b { width: 40px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pp-lock { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pp-lock .lk { height: 28px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--line2); background: var(--panel); cursor: pointer; font-size: 12px; font-weight: 700; color: var(--muted); }
+.pp-lock .lk.on { border-color: var(--brand); color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, var(--panel)); }
 .btn.wide { width: 100%; justify-content: center; display: flex; align-items: center; gap: 8px; }
 .small-btn { height: 30px; font-size: 12px; align-self: flex-start; }
 .pp-tg { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
