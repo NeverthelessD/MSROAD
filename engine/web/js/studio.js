@@ -16,7 +16,11 @@ const TITLE_MM = 4.2;   // 곡 제목 글자 크기 (mm)
 const PAGENO_MM = 3.2;  // 페이지 번호 글자 크기 (mm)
 const NOCROP = { l: 0, t: 0, r: 0, b: 0 };
 const MARGINS = [[5, '좁게'], [10, '보통'], [15, '넓게']];
-const FRAMES = [[1, '1곡'], [2, '2곡'], [3, '3곡'], [0, '자유']];
+const FRAMES = [[1, '1곡'], [2, '2곡'], [3, '3곡'], [4, '4곡'], [0, '자유']];
+// 틀의 칸 배치: 1 · 2 · 3곡은 좌우로 나란히, 4곡은 2줄 × 2칸 (1.3.1~)
+const gridOf = (n) => (n === 4 ? { cols: 2, rows: 2 } : { cols: n || 1, rows: 1 });
+const frameLabel = (n) => (!n ? '자유 배치' : n === 4 ? '4곡 (2×2)' : `${n}곡${n > 1 ? ' 나란히' : ''}`);
+const cellsHTML = (n) => (n === 4 ? '<i></i>'.repeat(4) : n ? '<i></i>'.repeat(n) : '<i style="flex:1.4"></i><i></i>');
 const DEFAULT_PRESETS = [
   { paper: 'A3', orient: 'landscape', frame: 2, margin: 10 },
   { paper: 'A4', orient: 'landscape', frame: 2, margin: 10 },
@@ -89,7 +93,7 @@ const I = {
   port: '<svg width="10" height="13" viewBox="0 0 10 13" aria-hidden="true"><rect x="1" y="1" width="8" height="11" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
   land: '<svg width="13" height="10" viewBox="0 0 13 10" aria-hidden="true"><rect x="1" y="1" width="11" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
 };
-const frameIcon = (n) => `<span class="fi">${n === 0 ? '<i style="flex:1.4"></i><i></i>' : '<i></i>'.repeat(n)}</span>`;
+const frameIcon = (n) => `<span class="fi${n === 4 ? ' g4' : ''}">${cellsHTML(n)}</span>`;
 
 // ══════════════════════════════════════════════════════ 모양 계산 (mm)
 function paperOf(set) {
@@ -104,13 +108,23 @@ function contentOf(set) {
 }
 function slotsOf(set) {
   const c = contentOf(set);
-  const n = set.frame || 1;
-  const w = (c.w - GAP * (n - 1)) / n;
+  const { cols, rows } = gridOf(set.frame);
+  const w = (c.w - GAP * (cols - 1)) / cols, h = (c.h - GAP * (rows - 1)) / rows;
   const band = set.title ? BAND : 0;
-  return Array.from({ length: n }, (_, i) => {
-    const x = c.x + i * (w + GAP);
-    return { box: { x, y: c.y, w, h: c.h }, band: { x, y: c.y, w, h: band }, img: { x, y: c.y + band, w, h: c.h - band } };
+  return Array.from({ length: cols * rows }, (_, i) => {
+    const x = c.x + (i % cols) * (w + GAP), y = c.y + Math.floor(i / cols) * (h + GAP);
+    return { box: { x, y, w, h }, band: { x, y, w, h: band }, img: { x, y: y + band, w, h: h - band } };
   });
+}
+// 칸 사이 구분선 [x1, y1, x2, y2] (mm)
+function dividersOf(set) {
+  const c = contentOf(set);
+  const { cols, rows } = gridOf(set.frame);
+  const w = (c.w - GAP * (cols - 1)) / cols, h = (c.h - GAP * (rows - 1)) / rows;
+  const out = [];
+  for (let i = 1; i < cols; i++) { const x = c.x + i * (w + GAP) - GAP / 2; out.push([x, c.y, x, c.y + c.h]); }
+  for (let j = 1; j < rows; j++) { const y = c.y + j * (h + GAP) - GAP / 2; out.push([c.x, y, c.x + c.w, y]); }
+  return out;
 }
 function inter(a, b) {
   const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
@@ -626,13 +640,12 @@ function pageDOM(set, pi, k, opts = {}) {
         t.textContent = titleOf(it.ref);
         el.append(t);
       }
-      if (set.divider && i > 0) {
-        const x = sl.box.x - GAP / 2;
-        const d = box({ x, y: sl.box.y, w: 0.01, h: sl.box.h }, 'divider');
-        d.style.width = Math.max(1, 0.3 * k) + 'px';
-        el.append(d);
-      }
     });
+    if (set.divider) for (const [x1, y1, x2, y2] of dividersOf(set)) {
+      const d = box({ x: x1, y: y1, w: x2 - x1, h: y2 - y1 }, 'divider');
+      if (x1 === x2) d.style.width = Math.max(1, 0.3 * k) + 'px'; else d.style.height = Math.max(1, 0.3 * k) + 'px';
+      el.append(d);
+    }
   }
   // 여백 글자 자리 (편집 화면에서만): 누르면 오른쪽에서 글자를 넣어요
   if (!opts.static) {
@@ -818,7 +831,7 @@ function renderStage() {
   const { W, H } = paperOf(s);
   const availW = Math.max(200, st.clientWidth - 60), availH = Math.max(200, st.clientHeight - 64);
   K = Math.min(availW / W, availH / H) * E.zoom;
-  const fr = s.frame ? `${s.frame}곡${s.frame > 1 ? ' 나란히' : ''}` : '자유 배치';
+  const fr = frameLabel(s.frame);
   const keep = st.querySelector('.st-scroll');
   const sx = keep?.scrollLeft || 0, sy = keep?.scrollTop || 0;
   st.innerHTML = `<div class="st-scroll"><div class="st-pagewrap" style="width:${W * K}px">
@@ -1663,7 +1676,7 @@ function renderSets() {
       <span class="spacer"></span>${E.set ? `<button class="btn" data-sets="close">${I.back}지금 세트로 돌아가기</button>` : ''}
       <button class="btn go" data-sets="new">${I.plus}새 세트</button></div>
     <div class="sets-sec"><span class="sets-h">자주 쓰는 틀 <small>누르면 그 틀로 새 세트를 만들어요</small></span>
-      <div class="presets">${presets().map((p, i) => `<span class="preset"><button data-preset="${i}"><span class="pi ${p.orient}">${p.frame ? '<i></i>'.repeat(p.frame) : '<i style="flex:1.4"></i><i></i>'}</span>${presetName(p)}${presetMarks(p)}</button><button class="px" data-delpreset="${i}" aria-label="${presetName(p)} 틀 지우기" title="이 틀 지우기">${I.x}</button></span>`).join('')}
+      <div class="presets">${presets().map((p, i) => `<span class="preset"><button data-preset="${i}"><span class="pi ${p.orient}${p.frame === 4 ? ' g4' : ''}">${cellsHTML(p.frame)}</span>${presetName(p)}${presetMarks(p)}</button><button class="px" data-delpreset="${i}" aria-label="${presetName(p)} 틀 지우기" title="이 틀 지우기">${I.x}</button></span>`).join('')}
       ${E.set ? `<button class="preset-add" data-sets="savepreset">+ 지금 틀 저장 <small>${presetName(E.set)}${hasMarks(E.set.marks) ? ' · 여백 글자 포함' : ''}</small></button>` : ''}</div></div>
     <div class="sets-sec"><span class="sets-h">저장한 세트 · ${list.length}개</span>
       ${list.length ? `<div class="set-grid" id="setGrid"></div>` : '<div class="st-empty big">아직 저장한 세트가 없어요. <b>새 세트</b>를 눌러 시작해 보세요.</div>'}</div>
@@ -1811,12 +1824,13 @@ function openFrames() {
   const scale = (paper, orient, n) => {
     const [a, b] = PAPER[paper];
     const [W, H] = orient === 'landscape' ? [b, a] : [a, b];
-    const s = Math.min(((W - 20 - GAP * (n - 1)) / n) / 210, (H - 20) / 297);
+    const { cols, rows } = gridOf(n);
+    const s = Math.min(((W - 20 - GAP * (cols - 1)) / cols) / 210, ((H - 20 - GAP * (rows - 1)) / rows) / 297);
     return Math.round(s * 100);
   };
   const draw = () => {
     const card = (n, name, desc, rec) => `<button class="fr-card ${o.frame === n ? 'on' : ''}" data-fr="${n}">
-        <div class="fr-art"><div class="fr-page ${o.orient}">${n ? Array.from({ length: n }, () => '<div class="fr-col"><i class="t"></i><i></i><i></i><i></i><i></i><i></i></div>').join('') : '<div class="fr-free a"></div><div class="fr-free b"></div><div class="fr-free c"></div>'}</div></div>
+        <div class="fr-art"><div class="fr-page ${o.orient}${n === 4 ? ' g4' : ''}">${n === 4 ? Array.from({ length: 4 }, () => '<div class="fr-col"><i class="t"></i><i></i><i></i></div>').join('') : n ? Array.from({ length: n }, () => '<div class="fr-col"><i class="t"></i><i></i><i></i><i></i><i></i><i></i></div>').join('') : '<div class="fr-free a"></div><div class="fr-free b"></div><div class="fr-free c"></div>'}</div></div>
         <div class="fr-name"><b>${name}</b>${rec ? '<span class="rec">추천</span>' : ''}</div><span class="muted">${desc}</span></button>`;
     const pct = (n) => (n ? scale(o.paper, o.orient, n) : null);
     m.innerHTML = `<div class="modal-head"><div><b>새 페이지 틀 고르기</b><div class="muted small">용지와 방향을 고르고, 한 페이지에 몇 곡을 나란히 넣을지 정해요. 나중에 언제든 바꿀 수 있어요.</div></div><span class="spacer"></span><button class="icon-btn" data-fr-a="close" aria-label="닫기">✕</button></div>
@@ -1831,9 +1845,10 @@ function openFrames() {
           ${card(1, '1곡', `한 곡을 페이지 가득. 원본 대비 ${pct(1)}%.`)}
           ${card(2, '2곡 나란히', `두 곡을 좌우로. 원본 대비 ${pct(2)}%.`, o.orient === 'landscape')}
           ${card(3, '3곡 나란히', `세 곡을 좌우로. 원본 대비 ${pct(3)}%.`)}
+          ${card(4, '4곡 (2×2)', `네 곡을 위아래 두 줄로. 원본 대비 ${pct(4)}%.`)}
           ${card(0, '자유 배치', '칸 없이 원하는 곳에 놓고 크기를 직접 조절해요.')}
         </div>
-        <div class="fr-note"><b>악보가 인쇄될 크기</b><span class="muted">원본 A4 악보 기준 · ${o.paper} ${o.orient === 'landscape' ? '가로' : '세로'}에 1곡 ${pct(1)}% · 2곡 ${pct(2)}% · 3곡 ${pct(3)}%${o.paper === 'A3' && o.orient === 'landscape' ? ' — A3 가로에 2곡이면 곡마다 A4 크기 그대로예요' : ''}</span></div>
+        <div class="fr-note"><b>악보가 인쇄될 크기</b><span class="muted">원본 A4 악보 기준 · ${o.paper} ${o.orient === 'landscape' ? '가로' : '세로'}에 1곡 ${pct(1)}% · 2곡 ${pct(2)}% · 3곡 ${pct(3)}% · 4곡 ${pct(4)}%${o.paper === 'A3' && o.orient === 'landscape' ? ' — A3 가로에 2곡이면 곡마다 A4 크기 그대로예요' : ''}</span></div>
       </div>
       <div class="fr-foot"><label class="fr-namein"><span>세트 이름</span><input type="text" class="st-input" id="frName" maxlength="60" placeholder="예: 이번 주 예배"></label><span class="spacer"></span><button class="btn" data-fr-a="close">취소</button><button class="btn go" data-fr-a="ok">이 틀로 시작</button></div>`;
   };
@@ -2132,10 +2147,7 @@ async function buildSpec(set, pageIdx, progress) {
         ops.push({ type: 'image', data: await textPNG(titleOf(it.ref), b.w, b.h, TITLE_MM), box: [b.x, b.y, b.w, b.h] });
       }
     }
-    if (slots && set.divider) for (let i = 1; i < slots.length; i++) {
-      const x = slots[i].box.x - GAP / 2;
-      ops.push({ type: 'line', line: [x, slots[i].box.y, x, slots[i].box.y + slots[i].box.h], width: 0.25, gray: 0.62 });
-    }
+    if (slots && set.divider) for (const line of dividersOf(set)) ops.push({ type: 'line', line, width: 0.25, gray: 0.62 });
     if (set.pageNo) {
       const c = contentOf(set);
       const y = c.y + c.h;

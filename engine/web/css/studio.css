@@ -219,7 +219,7 @@ body.mode-edit .seg-icons { display: none; }
 .ctx .danger { color: var(--danger); }
 
 /* 새 세트 · 틀 고르기 */
-.fr-modal { width: min(1040px, calc(100vw - 40px)); }
+.fr-modal { width: min(1180px, calc(100vw - 40px)); }
 .fr-modal .modal-head { align-items: flex-start; }
 .fr-modal .modal-head .muted { font-weight: 500; margin-top: 4px; }
 .fr-body { padding: 18px 22px 6px; display: flex; flex-direction: column; gap: 14px; }
@@ -242,7 +242,7 @@ body.mode-edit .seg-icons { display: none; }
 .fr-margins button { height: 26px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border: 0; border-radius: 8px; background: var(--sunken); cursor: pointer; font-size: 12.5px; font-weight: 700; }
 .fr-margins button small { font-weight: 500; opacity: .8; }
 .fr-margins button.on { background: var(--brand); color: #fff; }
-.fr-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.fr-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .fr-card { border-radius: 16px; border: 1px solid var(--line2); background: var(--panel); padding: 14px; display: flex; flex-direction: column; gap: 10px; text-align: left; cursor: pointer; }
 .fr-art { height: 130px; display: grid; place-items: center; background: var(--sunken); border-radius: 10px; }
 .fr-page { position: relative; background: #fff; border-radius: 2px; box-shadow: 0 2px 8px rgba(20,18,50,.15); padding: 7px; display: flex; gap: 5px; }
@@ -343,7 +343,7 @@ body.mode-edit .seg-icons { display: none; }
   .st-setbtn { max-width: 170px; }
   .st-save { display: none; }
   body.mode-edit .ver { display: none; }
-  .fr-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fr-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pv-side, .cr-side { width: 260px; }
 }
 
@@ -405,3 +405,12 @@ body.mode-edit .seg-icons { display: none; }
 .tx-btns .btn { display: flex; align-items: center; justify-content: center; gap: 6px; }
 .pp-warn { display: flex; flex-direction: column; gap: 6px; padding: 9px 11px; border-radius: 10px; font-size: 12px; background: color-mix(in srgb, #ffb020 14%, var(--panel)); color: var(--text); }
 .preset .pm { display: block; font-size: 10.5px; font-weight: 600; color: var(--muted); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 4곡 (2×2) 틀 (1.3.1) */
+.fi.g4 { display: inline-grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.pi.g4 { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.fr-page.g4 { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 4px; }
+.fr-page.g4 .fr-col { border-right: 0; gap: 3px; padding-top: 1px; min-height: 0; overflow: hidden; }
+.fr-page.g4 .fr-col:nth-child(odd) { border-right: 1px dashed rgba(108,92,255,.35); padding-right: 3px; }
+.fr-page.g4 .fr-col:nth-child(-n+2) { border-bottom: 1px dashed rgba(108,92,255,.35); padding-bottom: 2px; }
+.fr-page.g4 .fr-col i { height: 4px; }
