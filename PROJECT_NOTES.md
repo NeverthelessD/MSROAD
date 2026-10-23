@@ -29,6 +29,14 @@
 - [ ] 실제 Windows PC 에서 확인: SmartScreen, Edge 앱 창, PDF 인쇄 창(Edge PDF 보기) · Ctrl+P, 탐색기 /select, 한글 경로 · OneDrive 폴더
 
 ### 작업 기록
+- 2026-10-23 v1.3.0 (맥 · Windows) — 사용자 요청: 편집 · 인쇄 페이지 여백에 글자(예: 20261003 금요기도회) + 글자 상자.
+  **여백 글자**: 위 왼쪽 · 가운데 · 오른쪽, 아래 왼쪽 · 오른쪽(아래 가운데는 페이지 번호를 끄면 쓸 수 있음). set.marks(모든 페이지) ·
+  page.marks(이 페이지만, 있으면 이것을 씀) = { tl: { t, size: s|m|l, bold } }. {쪽} {전체} 는 쪽마다 바뀜. '+ 날짜'는 오늘(YYYYMMDD)을 글자로 넣음.
+  여백보다 크면 글자를 줄이고, 그래도 넘치면 …. 페이지 여백을 누르면(.mz) 오른쪽 입력 칸으로. '지금 틀 저장'에 여백 글자도 함께(프리셋 marks).
+  **글자 상자**: page.texts = [{ id, x, y, w(mm), t, pt, bold, align, color, bg }], 높이는 글자에 맞춰 자동. 끌어 옮기기 · 좌우 손잡이로 폭 ·
+  두 번 눌러 페이지에서 바로 고치기(빈 채로 마치면 빠짐) · 크기 6~96pt · 색 4가지 · 흰 바탕(밑의 악보 가림) · 복제 · 화살표로 1mm(shift 5mm).
+  화면과 PDF 가 같은 줄 나누기를 쓰도록 글자 폭은 canvas measureText(Pretendard)로 재고, PDF 에는 300dpi PNG 로 넣음(엔진 변경 없음).
+  틀을 바꿔도(reflow) 글자 상자 · 이 페이지만 여백 글자는 같은 쪽에 남김. 미리보기에서 L(글자 도우미)이 가려져 'undefinedP'로 보이던 버그 고침.
 - 2026-10-23 Windows 1.2.1 — 사용자 요청: 맥과 같은 기능의 Windows 버전, **HEIC 는 빼기**. YTROAD 방식:
   MSROAD.exe 하나 = 실행기 + 엔진(`--engine`), `%LOCALAPPDATA%\MSROAD` 에 엔진 복사 · Edge/Chrome `--app` 창. 폴더 고르기 · PDF 저장 위치는
   앱 안 폴더 목록(pickFolder, /api/fs/list · /api/fs/mkdir), 썸네일은 Go(gothumb.go, JPG · PNG · GIF, EXIF 회전), WEBP 는 원본 그대로,
