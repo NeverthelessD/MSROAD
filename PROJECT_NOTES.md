@@ -10,6 +10,7 @@
 
 ## 진행 사항
 
+- **2026-10-29 내려받기용 zip (사용자 요청)**: 저장소 `download/` 폴더에 `MSROAD.zip` · `MSROAD-Windows.zip`(앱 + 사용 가이드)를 올리고, README 맨 위 '앱 받기' 링크(`raw/main/download/MSROAD.zip`)로 바로 받게 했어요. 예전 버전 zip 은 지웠어요 (저장소 `releases/` 에도 업데이트용 최신판만).
 작업이 중간에 끊기면 아래 체크리스트에서 **처음으로 체크 안 된 항목부터** 이어서 하면 돼요.
 각 단계가 끝날 때마다 커밋 · 푸시해 둡니다.
 
@@ -191,6 +192,7 @@ osascript 폴더 선택 창, sips 썸네일/HEIC 변환(특히 WEBP · PDF 첫 �
 
 ## 결정 사항
 
+- **GitHub 에는 늘 최신판 zip 1개만**: 업데이트를 내보낼 때마다 `scripts/publish-download.sh` 가 앱 + 가이드 zip 을 `download/` 에 정해진 이름으로 바꿔 넣고 다른 파일은 지워요(release.sh 가 자동으로 불러요. GitHub 릴리스 페이지는 이 작업 환경에서 만들 수 없어 저장소 폴더를 써요). `releases/` 의 업데이트용 zip 도 현재 버전만 남겨요 — 설치된 앱은 latest.json 이 가리키는 zip 만 받고, '되돌리기'는 맥 안의 백업을 써서 예전 zip 이 필요 없어요.
 - 방식: YTROAD/SROAD와 동일. `MSROAD.app/Contents/MacOS/MSROAD` = bash 실행기 → Go 엔진을
   `~/Library/Application Support/MSROAD/bin/`에 복사해 127.0.0.1 + 무작위 토큰으로 띄우고, Chrome/Edge/Brave `--app` 창(없으면 기본 브라우저)으로 화면을 연다.
 - Apple Silicon 전용 (arm64). Windows 버전은 나중에 따로 요청 예정 → 엔진은 OS 의존 부분을 분리해 둔다.

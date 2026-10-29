@@ -29,9 +29,10 @@ printf '%s' "$VERSION" > "$WIN/stage/version.txt"
 ZIP="MSROAD-win-$VERSION.zip"
 python3 "$ROOT/scripts/zipdir.py" "$WIN/stage" "$ROOT/releases/$ZIP"
 python3 "$ROOT/scripts/feed.py" "$ROOT/releases/latest-win.json" "$VERSION" "$ROOT/releases/$ZIP" "${NOTES[@]+"${NOTES[@]}"}"
-ls -1t "$ROOT"/releases/MSROAD-win-*.zip | tail -n +4 | xargs -r rm -f
+find "$ROOT/releases" -maxdepth 1 -name "MSROAD-win-*.zip" ! -name "$ZIP" -delete   # 업데이트용 zip 은 최신판만
 
 cp "$WIN/stage/MSROAD.exe" "$WIN/MSROAD/MSROAD.exe"
 [ -f "$ROOT/docs/MSROAD_Windows_사용가이드.png" ] && cp "$ROOT/docs/MSROAD_Windows_사용가이드.png" "$WIN/MSROAD/"
 python3 "$ROOT/scripts/zipdir.py" "$WIN" "$ROOT/dist/MSROAD-Windows.zip" MSROAD
 echo "✔ releases/$ZIP · latest-win.json · dist/MSROAD-Windows.zip"
+bash "$ROOT/scripts/publish-download.sh"   # download/MSROAD-Windows.zip 도 새 버전으로 (커밋 · 푸시)
