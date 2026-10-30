@@ -178,9 +178,21 @@ function placeFree(it, set) {
   const { W: PW, H: PH } = paperOf(set);
   return { vis: r, box: { x: b.x, y: b.y, w: b.w, h: b.h }, clip: inter(r, { x: 0, y: 0, w: PW, h: PH }), area: null };
 }
-function placeOf(set, it) {
-  if (!set.frame) return placeFree(it, set);
-  const sl = slotsOf(set)[it.slot];
+// 쪽마다 다른 틀 (1.3.3~): page.frame · page.grid 가 있으면 그 쪽만 그 틀, 없으면 세트의 틀(set.frame · set.grid)
+const ownFrame = (p) => !!p && p.frame !== undefined;
+function layOf(set, pi) {
+  const p = set.pages[pi];
+  return ownFrame(p) ? { ...set, frame: p.frame, grid: p.grid } : set;
+}
+function pageOfItem(set, it) { return set.pages.findIndex((p) => p.items.includes(it)); }
+const anyFrame = (set, test) => set.pages.some((_, i) => test(layOf(set, i).frame));
+// 고른 악보가 있는 쪽의 틀 · 칸
+const layIt = (it) => layOf(E.set, pageOfItem(E.set, it));
+const areaOf = (it) => slotsOf(layIt(it))[it.slot].img;
+function placeOf(set, it, pi = pageOfItem(set, it)) {
+  const FL = layOf(set, pi);
+  if (!FL.frame) return placeFree(it, set);
+  const sl = slotsOf(FL)[it.slot];
   return sl ? placeIn(it, sl.img) : null;
 }
 // 지금 보이는 자리를 '직접 조절' 자리로 (칸 안의 비율)
@@ -219,9 +231,13 @@ function migrateItem(it, area) {
   it.fit = 'manual';
 }
 function migrateSet(set) {
-  if (!set?.frame) return;
-  const slots = slotsOf(set);
-  for (const p of set.pages) for (const it of p.items) migrateItem(it, slots[it.slot]?.img);
+  if (!set?.pages) return;
+  set.pages.forEach((p, i) => {
+    const FL = layOf(set, i);
+    if (!FL.frame) return;
+    const slots = slotsOf(FL);
+    for (const it of p.items) migrateItem(it, slots[it.slot]?.img);
+  });
 }
 
 // ══════════════════════════════════════════════════════ 글자 (여백 글자 · 글자 상자)
@@ -495,8 +511,12 @@ function songsOf(set) {
   }
   return out;
 }
+const frameName = (o) => (o.frame ? frameShort(o) : '자유 배치');
 function setMeta(set) {
-  const fr = set.frame ? frameShort(set) : '자유 배치';
+  // 쪽마다 틀이 다르면 쪽 순서대로 (예: 3곡 + 2곡)
+  const names = [];
+  set.pages.forEach((_, i) => { const n = frameName(layOf(set, i)); if (names[names.length - 1] !== n) names.push(n); });
+  const fr = names.length > 1 ? [...new Set(names)].join(' + ') : frameName(set.pages.length ? layOf(set, 0) : set);
   return `${set.paper} ${set.orient === 'landscape' ? '가로' : '세로'} · ${fr}`;
 }
 
@@ -505,9 +525,15 @@ function emptySlots(set, fromPage) {
   const out = [];
   for (let p = fromPage; p < set.pages.length; p++) {
     const used = new Set(set.pages[p].items.map((x) => x.slot));
-    for (let i = 0; i < set.frame; i++) if (!used.has(i)) out.push({ page: p, slot: i });
+    const n = layOf(set, p).frame;
+    for (let i = 0; i < n; i++) if (!used.has(i)) out.push({ page: p, slot: i });
   }
   return out;
+}
+// 빈 새 쪽: 보통은 세트의 틀. 세트가 자유 배치인데 이 쪽에 칸이 있으면 이 쪽 틀을 따라가요 (넘친 악보가 들어갈 칸)
+function blankLike(set, pi) {
+  const FL = layOf(set, pi);
+  return FL.frame && !set.frame ? { items: [], frame: FL.frame, ...(FL.grid ? { grid: FL.grid } : {}) } : { items: [] };
 }
 function makeItem(s, part) {
   return {
@@ -524,7 +550,8 @@ async function addSheet(s, at) {
   if (!parts.length) return;
   commit((set) => {
     let lastPage = E.page;
-    if (set.frame) {
+    const here = at?.page ?? E.page;
+    if (layOf(set, here).frame) {
       const targets = [];
       if (at && at.slot !== undefined) {
         const pg = set.pages[at.page];
@@ -535,7 +562,7 @@ async function addSheet(s, at) {
       while (targets.length < parts.length) {
         const free = emptySlots(set, from).filter((t) => !targets.some((u) => u.page === t.page && u.slot === t.slot));
         if (free.length) { targets.push(free[0]); continue; }
-        set.pages.push({ items: [] });
+        set.pages.push(blankLike(set, here));
       }
       parts.forEach((part, k) => {
         const it = makeItem(s, part);
@@ -568,22 +595,22 @@ function removeItem(id) {
   renderAll();
 }
 // 틀을 바꾸면 넣은 순서대로 새 칸에 다시 채워요
-function reflow(set, oldFrame, oldGrid) {
+// 한 쪽 안의 악보를 넣은 순서대로 (틀: 칸 번호, 자유 배치: 위에서 아래 · 왼쪽에서 오른쪽)
+const sortedItems = (items, framed) => [...items].sort((a, b) => framed
+  ? (a.slot ?? 0) - (b.slot ?? 0)
+  : (Math.round((a.rect?.y || 0) / 30) - Math.round((b.rect?.y || 0) / 30)) || (a.rect?.x || 0) - (b.rect?.x || 0));
+// 틀 → 자유 배치: 지금 보이는 자리 그대로
+function toFree(set, it, old) {
+  const pl = placeIn(it, slotsOf({ ...set, frame: old.frame, grid: old.grid })[it.slot]?.img || contentOf(set));
+  it.rect = { ...pl.vis };
+  delete it.slot; delete it.mrect;
+}
+// olds[i] = 바꾸기 전 i쪽의 틀 { frame, grid }
+function reflow(set, olds) {
   const all = [];
-  for (const p of set.pages) {
-    const items = [...p.items].sort((a, b) => oldFrame
-      ? (a.slot ?? 0) - (b.slot ?? 0)
-      : (Math.round((a.rect?.y || 0) / 30) - Math.round((b.rect?.y || 0) / 30)) || (a.rect?.x || 0) - (b.rect?.x || 0));
-    all.push(...items);
-  }
+  set.pages.forEach((p, i) => { for (const it of sortedItems(p.items, olds[i].frame)) all.push({ it, old: olds[i] }); });
   if (!set.frame) {
-    // 틀 → 자유 배치: 지금 보이는 자리 그대로
-    const tmp = { ...set, frame: oldFrame, grid: oldGrid };
-    for (const p of set.pages) for (const it of p.items) {
-      const pl = placeIn(it, slotsOf(tmp)[it.slot]?.img || contentOf(set));
-      it.rect = { ...pl.vis };
-      delete it.slot; delete it.mrect;
-    }
+    for (const { it, old } of all) if (old.frame) toFree(set, it, old);
     return;
   }
   // 글자 상자 · '이 페이지만' 여백 글자는 같은 쪽에 그대로 남겨요
@@ -591,10 +618,10 @@ function reflow(set, oldFrame, oldGrid) {
   const lastExtra = extra.reduce((m, x, i) => (x.texts?.length || x.marks ? i : m), -1);
   set.pages = [];
   for (let i = 0; i < Math.max(1, Math.ceil(all.length / set.frame), lastExtra + 1); i++) set.pages.push({ items: [] });
-  all.forEach((it, k) => {
+  all.forEach(({ it, old }, k) => {
     it.slot = k % set.frame;
     delete it.rect;
-    if (!oldFrame) { it.fit = 'fit'; delete it.mrect; }
+    if (!old.frame) { it.fit = 'fit'; delete it.mrect; }
     set.pages[Math.floor(k / set.frame)].items.push(it);
   });
   extra.forEach((x, i) => {
@@ -605,15 +632,43 @@ function reflow(set, oldFrame, oldGrid) {
 function setOption(key, val) {
   commit((set) => {
     if (key === 'frame') {
-      // val = { frame, grid } — 4곡 2×2 ↔ 4곡 한 줄은 칸 수가 같아서 자리 그대로예요
-      const old = set.frame, oldGrid = set.grid;
+      // val = { frame, grid } — 모든 쪽을 같은 틀로 (쪽마다 따로 정한 틀은 없어져요)
+      // 4곡 2×2 ↔ 4곡 한 줄은 칸 수가 같아서 자리 그대로예요
+      const olds = set.pages.map((_, i) => { const FL = layOf(set, i); return { frame: FL.frame, grid: FL.grid }; });
+      for (const p of set.pages) { delete p.frame; delete p.grid; }
       set.frame = val.frame;
       if (val.grid) set.grid = val.grid; else delete set.grid;
-      if (old !== val.frame) { reflow(set, old, oldGrid); E.page = 0; }
+      if (olds.some((o) => o.frame !== val.frame)) { reflow(set, olds); E.page = 0; }
       return;
     }
     set[key] = val;
   });
+}
+// 이 쪽만 틀 바꾸기 (1.3.3~). 칸이 모자라면 넘친 악보는 바로 뒤에 같은 틀의 새 쪽을 만들어 넣어요.
+function setPageFrame(pi, val) {
+  let added = 0;
+  commit((set) => {
+    const page = set.pages[pi];
+    const old = layOf(set, pi);
+    if (val.frame === set.frame && (val.grid || '') === (set.grid || '')) { delete page.frame; delete page.grid; } // 세트 틀과 같으면 따로 두지 않아요
+    else { page.frame = val.frame; if (val.grid) page.grid = val.grid; else delete page.grid; }
+    if (old.frame === val.frame) return;
+    const items = sortedItems(page.items, old.frame);
+    if (!val.frame) { for (const it of items) if (old.frame) toFree(set, it, old); return; }
+    const n = val.frame, extra = [];
+    page.items = [];
+    items.forEach((it, k) => {
+      delete it.rect;
+      if (!old.frame) { it.fit = 'fit'; delete it.mrect; }
+      if (k < n) { it.slot = k; page.items.push(it); } else extra.push(it);
+    });
+    for (let k = 0; k < extra.length; k += n) {
+      const np = { items: extra.slice(k, k + n).map((it, j) => Object.assign(it, { slot: j })) };
+      if (ownFrame(page)) { np.frame = page.frame; if (page.grid) np.grid = page.grid; }
+      set.pages.splice(pi + 1 + added++, 0, np);
+    }
+  });
+  if (added) toast(`칸이 모자라서 넘친 악보를 ${pi + 2}쪽${added > 1 ? `~${pi + 1 + added}쪽` : ''}에 새로 넣었어요`, { action: '되돌리기', onAction: undo });
 }
 
 // ══════════════════════════════════════════════════════ 페이지 그리기
@@ -632,8 +687,9 @@ function pageDOM(set, pi, k, opts = {}) {
     Object.assign(d.style, { left: r.x * k + 'px', top: r.y * k + 'px', width: r.w * k + 'px', height: r.h * k + 'px' });
     return d;
   };
-  if (set.frame) {
-    const slots = slotsOf(set);
+  const FL = layOf(set, pi);
+  if (FL.frame) {
+    const slots = slotsOf(FL);
     slots.forEach((sl, i) => {
       const it = page.items.find((x) => x.slot === i);
       if (!opts.static) {
@@ -649,7 +705,7 @@ function pageDOM(set, pi, k, opts = {}) {
         el.append(t);
       }
     });
-    if (set.divider) for (const [x1, y1, x2, y2] of dividersOf(set)) {
+    if (set.divider) for (const [x1, y1, x2, y2] of dividersOf(FL)) {
       const d = box({ x: x1, y: y1, w: x2 - x1, h: y2 - y1 }, 'divider');
       if (x1 === x2) d.style.width = Math.max(1, 0.3 * k) + 'px'; else d.style.height = Math.max(1, 0.3 * k) + 'px';
       el.append(d);
@@ -669,7 +725,7 @@ function pageDOM(set, pi, k, opts = {}) {
     }
   }
   for (const it of page.items) {
-    const pl = placeOf(set, it);
+    const pl = placeOf(set, it, pi);
     if (!pl || !pl.clip) continue;
     const w = box(pl.clip, 'it');
     w.dataset.id = it.id;
@@ -805,7 +861,7 @@ function renderTools() {
   t.innerHTML = `
     <div class="grp"><span>용지</span>${seg('paper', [['A4', 'A4'], ['A3', 'A3']])}</div>
     <div class="grp"><span>방향</span>${seg('orient', [['portrait', `${I.port}세로`], ['landscape', `${I.land}가로`]])}</div>
-    <div class="grp"><span>틀</span>${seg('frame', FRAMES.map(([v, l]) => [v, frameIcon(fromKey(v)) + l, frameLabel(fromKey(v))]))}</div>
+    <div class="grp" title="모든 페이지의 틀 — 한 쪽만 바꾸려면 오른쪽 ‘이 페이지 틀’에서 골라요"><span>틀</span>${seg('frame', FRAMES.map(([v, l]) => [v, frameIcon(fromKey(v)) + l, frameLabel(fromKey(v))]))}</div>
     <div class="grp"><span>여백</span>${seg('margin', MARGINS.map(([v, l]) => [v, l]))}</div>
     <span class="spacer"></span>
     <button class="st-addtx" data-addtx title="글자 상자 넣기 — 페이지 아무 곳에나 글자를 넣어요" aria-label="글자 상자 넣기">${I.text}<span>글자 상자</span></button>`;
@@ -816,7 +872,14 @@ $('#studio').addEventListener('click', (e) => {
     const v = e.target.closest('[data-v]')?.dataset.v;
     if (v === undefined) return;
     const key = opt.dataset.opt;
-    if (key === 'frame') { if (frameKey(E.set) !== v) setOption('frame', fromKey(v)); return; }
+    if (key === 'frame') {
+      const mixed = E.set.pages.some(ownFrame);
+      if (frameKey(E.set) !== v || mixed) {
+        setOption('frame', fromKey(v));
+        if (mixed) toast(`모든 페이지를 ‘${frameLabel(fromKey(v))}’ 틀로 맞췄어요`, { action: '되돌리기', onAction: undo });
+      }
+      return;
+    }
     const val = key === 'margin' ? Number(v) : v;
     if (E.set[key] !== val) setOption(key, val);
     return;
@@ -841,7 +904,8 @@ function renderStage() {
   const { W, H } = paperOf(s);
   const availW = Math.max(200, st.clientWidth - 60), availH = Math.max(200, st.clientHeight - 64);
   K = Math.min(availW / W, availH / H) * E.zoom;
-  const fr = frameLabel(s);
+  const pl0 = layOf(s, E.page);
+  const fr = frameLabel(pl0) + (ownFrame(s.pages[E.page]) ? ' (이 쪽만)' : '');
   const keep = st.querySelector('.st-scroll');
   const sx = keep?.scrollLeft || 0, sy = keep?.scrollTop || 0;
   st.innerHTML = `<div class="st-scroll"><div class="st-pagewrap" style="width:${W * K}px">
@@ -862,11 +926,12 @@ function drawSelection() {
   if (E.tsel) return drawTextSelection(pg);
   const f = findItem(E.sel);
   if (!f || f.page !== E.page) return;
-  const pl = placeOf(E.set, f.it);
+  const pl = placeOf(E.set, f.it, f.page);
   if (!pl) return;
-  const r = E.set.frame ? pl.clip || pl.vis : pl.vis;
+  const framed = !!layOf(E.set, f.page).frame;
+  const r = framed ? pl.clip || pl.vis : pl.vis;
   const sel = document.createElement('div');
-  sel.className = 'sel-box' + (E.set.frame ? '' : ' free');
+  sel.className = 'sel-box' + (framed ? '' : ' free');
   Object.assign(sel.style, { left: r.x * K + 'px', top: r.y * K + 'px', width: r.w * K + 'px', height: r.h * K + 'px' });
   sel.innerHTML = ['nw', 'ne', 'sw', 'se', 'n', 's', 'w', 'e'].map((h) => `<i class="hd ${h}" data-h="${h}" title="${h.length === 2 ? '크기 바꾸기' : h === 'n' || h === 's' ? '세로만 늘리기 · 줄이기' : '가로만 늘리기 · 줄이기'}"></i>`).join('');
   pg.append(sel);
@@ -875,7 +940,7 @@ function drawSelection() {
   const mini = document.createElement('div');
   mini.className = 'st-mini';
   mini.innerHTML = `<button data-mini="crop">${I.crop}자르기</button>
-    ${E.set.frame ? `<button data-mini="fit">${I.fit}칸에 맞추기</button>` : ''}
+    ${framed ? `<button data-mini="fit">${I.fit}칸에 맞추기</button>` : ''}
     ${others.length ? `<button data-mini="key">${I.swap}다른 키로</button>` : ''}
     <button data-mini="remove" class="danger" aria-label="빼기" title="빼기 (delete)">${I.x}</button>`;
   pg.append(mini);
@@ -966,7 +1031,7 @@ function renderStrip() {
     d.dataset.goto = i;
     d.title = `${i + 1}쪽`;
     d.append(pageDOM(s, i, k, { static: true, q: 'thumb' }));
-    d.insertAdjacentHTML('beforeend', `<span>${i + 1}쪽</span>${s.pages.length > 1 ? `<button class="del" data-delpage="${i}" aria-label="${i + 1}쪽 지우기" title="이 쪽 지우기">${I.x}</button>` : ''}`);
+    d.insertAdjacentHTML('beforeend', `<span>${i + 1}쪽${ownFrame(p) ? ` <em class="pf-tag" title="이 쪽만 따로 정한 틀">${frameName(layOf(s, i))}</em>` : ''}</span>${s.pages.length > 1 ? `<button class="del" data-delpage="${i}" aria-label="${i + 1}쪽 지우기" title="이 쪽 지우기">${I.x}</button>` : ''}`);
     wrap.append(d);
   });
   wrap.insertAdjacentHTML('beforeend', `<button class="st-addpage" data-addpage style="width:${W * k}px;height:${H * k}px">+ 페이지</button>`);
@@ -1016,7 +1081,8 @@ function renderProps() {
     const bent = pl ? Math.abs(stretchOf(it, pl.vis) - 1) > 0.01 : false;
     const sizeRow = (ax, label, val, min, max, unit) => `<div class="pp-size"><span>${label}</span><button data-isz="${ax}-" aria-label="${label} 줄이기">−</button><input type="range" min="${min}" max="${max}" step="1" value="${clamp(val, min, max)}" data-szr="${ax}" aria-label="${label} 크기"><button data-isz="${ax}+" aria-label="${label} 늘리기">+</button><b data-szt="${ax}">${val}${unit}</b></div>`;
     const lockRow = `<div class="pp-lock"><button class="lk ${lock ? 'on' : ''}" data-lock aria-pressed="${lock}">${lock ? '🔗 비율 유지' : '↔︎ 가로 · 세로 따로'}</button>${bent ? '<button class="btn ghost small-btn" data-pp="ratio">원래 비율로</button>' : ''}</div>`;
-    if (s.frame && pl) {
+    const framed = !!layOf(s, f.page).frame;
+    if (framed && pl) {
       const a = pl.area, fr = pl.fit;
       const pw = Math.round(pl.px * 100), ph = Math.round(pl.py * 100);
       h += `<div class="pp-sec"><span class="pp-h">크기 <small class="muted">칸은 그대로, 악보만 커지거나 작아져요</small></span>
@@ -1037,7 +1103,7 @@ function renderProps() {
         <button class="btn wide" data-pp="crop">${I.crop}자르기 열기</button>
         <span class="muted small">${cropped ? `위 ${Math.round(c.t * 100)}% · 아래 ${Math.round(c.b * 100)}% · 왼쪽 ${Math.round(c.l * 100)}% · 오른쪽 ${Math.round(c.r * 100)}% 잘라냄` : '잘라내면 남은 부분이 칸에 맞게 커져요'} · 원본 파일은 그대로예요</span>
         ${cropped ? '<button class="btn ghost small-btn" data-pp="uncrop">원래대로 펼치기</button>' : ''}</div>`;
-    if (s.frame) {
+    if (framed) {
       h += `<div class="pp-sec"><span class="pp-h">칸 안에서 위치</span>
           <div class="seg full" data-item="align"><button data-v="top" class="${it.align === 'top' ? 'on' : ''}">위</button><button data-v="center" class="${it.align === 'center' ? 'on' : ''}">가운데</button><button data-v="bottom" class="${it.align === 'bottom' ? 'on' : ''}">아래</button></div></div>`;
     }
@@ -1046,11 +1112,12 @@ function renderProps() {
     h += `<div class="pp-sec"><span class="pp-lbl">악보를 고르면</span><span class="muted small">자르기 · 크기 · 위치를 여기에서 바꿀 수 있어요. 왼쪽 목록에서 악보를 끌어 페이지에 놓아 보세요.</span></div><div class="pp-rule"></div>`;
   }
   const plain = !f && !tf;
+  if (plain) h += pageFrameProps() + '<div class="pp-rule"></div>';
   const tg = (key, label, disabled, note) => `<div class="pp-tg ${disabled ? 'dis' : ''}"><span>${label}${note ? `<small>${note}</small>` : ''}</span><button class="tg ${s[key] && !disabled ? 'on' : ''}" data-tg="${key}" aria-pressed="${!!s[key] && !disabled}" aria-label="${label}" ${disabled ? 'disabled' : ''}><i></i></button></div>`;
   h += `<div class="pp-sec"><span class="pp-h">페이지에 넣을 것</span>
-      ${tg('title', '곡 제목', !s.frame, !s.frame ? '자유 배치에서는 안 써요' : '')}
+      ${tg('title', '곡 제목', !anyFrame(s, (n) => n > 0), !anyFrame(s, (n) => n > 0) ? '자유 배치에서는 안 써요' : '')}
       ${tg('pageNo', '페이지 번호')}
-      ${tg('divider', '칸 사이 구분선', !(s.frame > 1))}</div>
+      ${tg('divider', '칸 사이 구분선', !anyFrame(s, (n) => n > 1))}</div>
     ${plain ? '<div class="pp-rule"></div>' + marksProps() + '<div class="pp-rule"></div>' + `<div class="pp-sec"><span class="pp-h">글자 상자 <small class="muted">페이지 아무 곳에나</small></span>
       <button class="btn wide" data-addtx>${I.text}글자 상자 넣기</button>
       <span class="muted small">‘후렴 2번’ 같은 메모를 악보 위에 얹을 수도 있어요. 끌어서 옮기고, 두 번 누르면 바로 고쳐요.</span></div>` : ''}
@@ -1081,8 +1148,9 @@ function renderProps() {
 function syncSizeUI(it) {
   const pl = placeOf(E.set, it);
   if (!pl) return;
-  const vals = E.set.frame ? { w: Math.round(pl.px * 100), h: Math.round(pl.py * 100) } : { w: Math.round(it.rect.w), h: Math.round(it.rect.h) };
-  const unit = E.set.frame ? '%' : '';
+  const framed = !!layIt(it).frame;
+  const vals = framed ? { w: Math.round(pl.px * 100), h: Math.round(pl.py * 100) } : { w: Math.round(it.rect.w), h: Math.round(it.rect.h) };
+  const unit = framed ? '%' : '';
   for (const ax of ['w', 'h']) {
     const t = $(`#stProps [data-szt="${ax}"]`); if (t) t.textContent = vals[ax] + unit;
     const r = $(`#stProps [data-szr="${ax}"]`); if (r && document.activeElement !== r) r.value = vals[ax];
@@ -1092,8 +1160,8 @@ function syncSizeUI(it) {
 // 가로(w) · 세로(h) 크기를 바꿔요. 틀: 맞춤 크기 대비 %, 자유 배치: mm. 비율 유지면 둘 다 같이, 늘 칸 · 용지 안에서.
 function setSize(it, ax, val) {
   const lock = it.lock !== false;
-  if (E.set.frame) {
-    const area = slotsOf(E.set)[it.slot].img;
+  if (layIt(it).frame) {
+    const area = areaOf(it);
     toManual(it, area);
     const fr = fitRect(it, area);
     const m = it.mrect;
@@ -1116,8 +1184,8 @@ function setSize(it, ax, val) {
 }
 // 비율 그대로 몇 배로 (−/+ 버튼 · 트랙패드 오므리기)
 function scaleSel(it, f) {
-  if (E.set.frame) {
-    const area = slotsOf(E.set)[it.slot].img;
+  if (layIt(it).frame) {
+    const area = areaOf(it);
     toManual(it, area);
     const m = it.mrect;
     const r = Math.min(f, 1 / m.w, 1 / m.h);
@@ -1138,7 +1206,7 @@ root.addEventListener('click', (e) => {
     if (!v) return;
     commit(() => {
       if (item.dataset.item === 'fit') {
-        const area = slotsOf(E.set)[it.slot].img;
+        const area = areaOf(it);
         if (v === 'manual') toManual(it, area); // 지금 크기에서 이어서 조절
         else { it.fit = v; delete it.mrect; }
       } else if (item.dataset.item === 'align') {
@@ -1152,9 +1220,10 @@ root.addEventListener('click', (e) => {
   if (isz && it) {
     const ax = isz[0], up = isz[1] === '+';
     const pl = placeOf(E.set, it);
-    const cur = E.set.frame ? Math.round((ax === 'w' ? pl.px : pl.py) * 100) : Math.round(ax === 'w' ? it.rect.w : it.rect.h);
-    const step = E.set.frame ? 5 : 5;
-    commit(() => setSize(it, ax, Math.max(E.set.frame ? 15 : 10, cur + (up ? step : -step))));
+    const framed = !!layIt(it).frame;
+    const cur = framed ? Math.round((ax === 'w' ? pl.px : pl.py) * 100) : Math.round(ax === 'w' ? it.rect.w : it.rect.h);
+    const step = 5;
+    commit(() => setSize(it, ax, Math.max(framed ? 15 : 10, cur + (up ? step : -step))));
     return;
   }
   if (e.target.closest('[data-lock]') && it) { commit(() => { it.lock = it.lock === false; }); return; }
@@ -1168,8 +1237,8 @@ root.addEventListener('click', (e) => {
 // 원래 비율로 (가로는 두고 세로를 맞춰요. 칸을 넘치면 둘 다 줄여요)
 function restoreRatio(it) {
   const { vw, vh } = visDims(it);
-  if (E.set.frame) {
-    const area = slotsOf(E.set)[it.slot].img;
+  if (layIt(it).frame) {
+    const area = areaOf(it);
     toManual(it, area);
     const m = it.mrect;
     let w = m.w, h = m.w * area.w * vh / vw / area.h;
@@ -1188,6 +1257,24 @@ function markTarget(create) {
   if (create && (!E.set.marks || Array.isArray(E.set.marks))) E.set.marks = {};
   return E.set.marks || {};
 }
+// ── 이 페이지 틀 (1.3.3~): 쪽마다 곡 수를 다르게 ──
+function pageFrameProps() {
+  const s = E.set, p = s.pages[E.page], own = ownFrame(p);
+  const cur = frameKey(layOf(s, E.page));
+  return `<div class="pp-sec pf-sec"><span class="pp-h">이 페이지 틀 <small class="muted">${E.page + 1}쪽</small></span>
+    <div class="pf-grid" data-pframe>${FRAMES.map(([v, l]) => `<button data-v="${v}" class="${cur === v ? 'on' : ''}" title="${E.page + 1}쪽만 ${frameLabel(fromKey(v))}">${frameIcon(fromKey(v))}<span>${l}</span></button>`).join('')}</div>
+    <span class="muted small">${own
+    ? `${E.page + 1}쪽만 따로 정한 틀이에요. 다른 쪽은 그대로예요.`
+    : '여기서 고르면 이 쪽만 바뀌어요. 위쪽 ‘틀’은 모든 페이지를 한꺼번에 바꿔요.'}</span>
+    ${own ? `<button class="btn ghost small-btn" data-pframe-reset>모든 페이지와 같게 (${frameName(s)})</button>` : ''}</div>`;
+}
+root.addEventListener('click', (e) => {
+  if (!E.set || E.layer) return;
+  if (e.target.closest('[data-pframe-reset]')) { setPageFrame(E.page, { frame: E.set.frame, grid: E.set.grid }); return; }
+  const b = e.target.closest('[data-pframe] [data-v]');
+  if (!b || b.classList.contains('on')) return;
+  setPageFrame(E.page, fromKey(b.dataset.v));
+});
 function marksProps() {
   const s = E.set, ms = marksOf(s, E.page);
   if (!spotUsable(s, E.mspot)) E.mspot = 'tl';
@@ -1400,7 +1487,7 @@ function dropTarget(x, y) {
   const el = document.elementFromPoint(x, y);
   if (!el || !E.set) return null;
   const pg = el.closest('#stStage .pg');
-  if (E.set.frame) {
+  if (layOf(E.set, E.page).frame) {
     const sl = el.closest('#stStage .slot') || (pg && slotAtPoint(pg, x, y));
     if (sl) return { page: E.page, slot: Number(sl.dataset.slot), el: sl };
   } else if (pg) {
@@ -1465,7 +1552,7 @@ root.addEventListener('pointerdown', (e) => {
       const t = dropTarget(ev.clientX, ev.clientY);
       if (!t) return;
       if (t.gotoPage !== undefined) { E.page = t.gotoPage; await addSheet(s, null); return; }
-      if (t.newPage) { commit((set) => set.pages.push({ items: [] }), { render: false }); E.page = E.set.pages.length - 1; await addSheet(s, E.set.frame ? { page: E.page, slot: 0 } : null); return; }
+      if (t.newPage) { commit((set) => set.pages.push({ items: [] }), { render: false }); E.page = E.set.pages.length - 1; await addSheet(s, layOf(E.set, E.page).frame ? { page: E.page, slot: 0 } : null); return; }
       await addSheet(s, t);
     },
   });
@@ -1513,7 +1600,7 @@ root.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   const before = snapshot();
   const pushOnce = () => { if (E.hist[E.hist.length - 1] !== before) { E.hist.push(before); E.fut = []; } };
-  if (!E.set.frame) {
+  if (!layOf(E.set, f.page).frame) {
     // 자유 배치: 옮기기 · 모서리(비율 유지 켜면 비율 그대로) · 가장자리(가로나 세로만)
     const r0 = { ...it.rect };
     trackPointer(e, {
@@ -1533,7 +1620,7 @@ root.addEventListener('pointerdown', (e) => {
     });
     return;
   }
-  const area = slotsOf(E.set)[it.slot].img;
+  const area = slotsOf(layOf(E.set, f.page))[it.slot].img;
   if (hd || it.fit === 'manual') {
     // 틀: 칸 안에서만 크기 · 위치 바꾸기 (칸 밖으로는 나가지 않아요)
     let r0f = null;
@@ -1575,8 +1662,18 @@ root.addEventListener('pointerdown', (e) => {
           if (t.gotoPage !== undefined || t.newPage) {
             if (t.newPage) set.pages.push({ items: [] });
             toPage = t.newPage ? set.pages.length - 1 : t.gotoPage;
+            const tf = layOf(set, toPage).frame;
+            if (!tf) {
+              // 자유 배치 쪽으로: 보이던 크기 · 자리 그대로
+              if (toPage === f.page) return;
+              toFree(set, me, layOf(set, f.page));
+              from.items = from.items.filter((x) => x !== me);
+              set.pages[toPage].items.push(me);
+              E.page = toPage;
+              return;
+            }
             const used = new Set(set.pages[toPage].items.map((x) => x.slot));
-            toSlot = [...Array(set.frame).keys()].find((i) => !used.has(i));
+            toSlot = [...Array(tf).keys()].find((i) => !used.has(i));
             if (toSlot === undefined) { toast('그 쪽에는 빈 칸이 없어요'); return; }
           }
           if (toSlot === undefined) return;
@@ -1952,7 +2049,7 @@ function applyCrop() {
   commit(() => {
     const keep = f.it.rect ? stretchOf(f.it, f.it.rect) : 1;
     f.it.crop = { ...c };
-    if (E.set.frame && f.it.fit === 'manual') { f.it.fit = 'fit'; delete f.it.mrect; }
+    if (layOf(E.set, f.page).frame && f.it.fit === 'manual') { f.it.fit = 'fit'; delete f.it.mrect; }
     fixFreeAspect(f.it, keep);
   }, { render: false });
   closeLayer();
@@ -2140,11 +2237,12 @@ async function buildSpec(set, pageIdx, progress) {
   for (const pi of pageIdx) {
     const page = set.pages[pi];
     const ops = [];
-    const slots = set.frame ? slotsOf(set) : null;
-    const items = set.frame ? [...page.items].sort((a, b) => a.slot - b.slot) : page.items;
+    const FL = layOf(set, pi);
+    const slots = FL.frame ? slotsOf(FL) : null;
+    const items = FL.frame ? [...page.items].sort((a, b) => a.slot - b.slot) : page.items;
     for (const it of items) {
       progress?.(++done, total);
-      const pl = placeOf(set, it);
+      const pl = placeOf(set, it, pi);
       if (!pl || !pl.clip) continue;
       const s = sheetOf(it.ref);
       if (!s || !s.pages[it.ref.file]) { missing.push(it.ref.title); continue; }
@@ -2159,7 +2257,7 @@ async function buildSpec(set, pageIdx, progress) {
         ops.push({ type: 'image', data: await textPNG(titleOf(it.ref), b.w, b.h, TITLE_MM), box: [b.x, b.y, b.w, b.h] });
       }
     }
-    if (slots && set.divider) for (const line of dividersOf(set)) ops.push({ type: 'line', line, width: 0.25, gray: 0.62 });
+    if (slots && set.divider) for (const line of dividersOf(FL)) ops.push({ type: 'line', line, width: 0.25, gray: 0.62 });
     if (set.pageNo) {
       const c = contentOf(set);
       const y = c.y + c.h;

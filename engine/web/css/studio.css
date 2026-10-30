@@ -418,3 +418,11 @@ body.mode-edit .seg-icons { display: none; }
 .st-tools { gap: 10px; }
 .st-tools .seg button { padding: 0 7px; }
 @media (max-width: 1500px) { .st-addtx { padding: 0 8px; } .st-addtx span { display: none; } }
+
+/* 이 페이지 틀 (1.3.3~): 쪽마다 곡 수를 다르게 */
+.pf-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 10px; background: var(--sunken); }
+.pf-grid button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 6px; border: 0; border-radius: 7px; background: none; cursor: pointer; font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.pf-grid button:hover { color: var(--text); }
+.pf-grid button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+.pf-sec .small-btn { align-self: flex-start; }
+.st-thumb > span .pf-tag { font-style: normal; font-size: 10px; font-weight: 800; padding: 1px 5px; border-radius: 6px; color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, var(--panel)); }
