@@ -1,0 +1,57 @@
+▶ 준비: 앱 설치 · 시험용 악보 폴더 · 설정
+▶ A. 켜기 · 화면
+PASS  A1 앱을 열면 엔진이 준비됨
+PASS  A2 엔진이 Dock 앱 방식으로 켜짐(shell=native)
+PASS  A3 주소가 47917
+PASS  A4 악보 6개를 읽음 (읽은 수: 6)
+PASS  A5 화면이 앱 창(WKWebView)에서 열림
+PASS  A6 엔진이 MSROAD 앱의 자식 (앱 2321 → 지킴이 2331 → 엔진 2332)
+▶ B. Dock 아이콘 다시 누르기(reopen)
+PASS  B1 다시 열기 뒤에도 앱·엔진 그대로
+▶ C. 엔진이 고장으로 꺼지면 지킴이가 다시 켬
+PASS  C1 엔진 다시 켜짐
+PASS  C2 앱은 그대로
+▶ P. 편집 · 인쇄 (세트 저장 · PDF 만들기 · 인쇄)
+{"bytes":503956,"name":"시험 세트.pdf","ok":true,"pages":2,"path":"/Users/runner/Library/Application Support/MSROAD/print/20261030-145148.854/시험 세트.pdf"}
+
+PASS  P1 배치를 PDF로 만듦
+PASS  P2 맥 인쇄 기능으로 인쇄됨 (파일로 인쇄, 코드 0)
+PASS  P3 세트를 저장하고 다시 읽음
+PASS  P4 인쇄 시험 뒤에도 앱은 1개
+▶ D. 앱 종료(⌘Q) → 엔진까지 모두 꺼짐
+PASS  D1 앱·엔진 모두 꺼짐
+▶ E. 화면의 '종료' 버튼(= /api/quit) → 앱도 꺼짐
+PASS  E1 앱·엔진 모두 꺼짐
+▶ F. 앱이 강제로 꺼지면 엔진도 스스로 꺼짐
+PASS  F1 남은 엔진 없음
+▶ G. 업데이트 뒤 다시 열기 (/api/update/restart)
+PASS  G1 새로 열린 앱이 엔진을 켬
+PASS  G2 앱이 새로 열림 (2678 → 2708)
+▶ H. 1.0.4 이하에서 업데이트된 경우 (앱 파일을 직접 실행) → 정식 방법으로 다시 열림
+PASS  H1 다시 열린 앱이 엔진을 켬
+PASS  H2 앱 하나만 떠 있음 (1개)
+PASS  H3 끝나면 모두 꺼짐
+▶ 기록 모으기
+
+== 결과 ==
+PASS  A1 앱을 열면 엔진이 준비됨
+PASS  A2 엔진이 Dock 앱 방식으로 켜짐(shell=native)
+PASS  A3 주소가 47917
+PASS  A4 악보 6개를 읽음 (읽은 수: 6)
+PASS  A5 화면이 앱 창(WKWebView)에서 열림
+PASS  A6 엔진이 MSROAD 앱의 자식 (앱 2321 → 지킴이 2331 → 엔진 2332)
+PASS  B1 다시 열기 뒤에도 앱·엔진 그대로
+PASS  C1 엔진 다시 켜짐
+PASS  C2 앱은 그대로
+PASS  P1 배치를 PDF로 만듦
+PASS  P2 맥 인쇄 기능으로 인쇄됨 (파일로 인쇄, 코드 0)
+PASS  P3 세트를 저장하고 다시 읽음
+PASS  P4 인쇄 시험 뒤에도 앱은 1개
+PASS  D1 앱·엔진 모두 꺼짐
+PASS  E1 앱·엔진 모두 꺼짐
+PASS  F1 남은 엔진 없음
+PASS  G1 새로 열린 앱이 엔진을 켬
+PASS  G2 앱이 새로 열림 (2678 → 2708)
+PASS  H1 다시 열린 앱이 엔진을 켬
+PASS  H2 앱 하나만 떠 있음 (1개)
+PASS  H3 끝나면 모두 꺼짐
