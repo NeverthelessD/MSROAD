@@ -34,7 +34,11 @@ mkdir -p "$SUP"
 printf '{"appearance":"light","folder":"%s","recent":["%s"],"subfolders":true,"autoUpdate":false,"ui":{}}' "$SHEETS" "$SHEETS" > "$SUP/settings.json"
 
 echo "▶ A. 켜기 · 화면"
+# 예전 "backup" 폴더의 이전 버전 → 앱이 켜지면 Spotlight 가 안 찾는 backup.noindex 로 옮겨야 해요
+rm -rf "$SUP/backup" "$SUP/backup.noindex"; mkdir -p "$SUP/backup"; ditto "$APPDIR" "$SUP/backup/MSROAD.app"
+printf '1.0.0' > "$SUP/backup/MSROAD.app/Contents/Resources/version.txt"
 launch; check "A1 앱을 열면 엔진이 준비됨" ping_ok
+check "A1b 이전 버전 보관본을 Spotlight 가 안 찾는 폴더(backup.noindex)로 옮김" bash -c "test -d '$SUP/backup.noindex/MSROAD.app' && test ! -e '$SUP/backup'"
 check "A2 엔진이 Dock 앱 방식으로 켜짐(shell=native)" bash -c "curl -fs -H 'x-token: $(tok)' http://127.0.0.1:$(port)/api/ping | grep -q '\"shell\":\"native\"'"
 check "A3 주소가 47917" test "$(port)" = "47917"
 N=$(curl -fs -H "x-token: $(tok)" "http://127.0.0.1:$(port)/api/library" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['sheets']))" 2>/dev/null)

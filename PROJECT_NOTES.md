@@ -31,6 +31,9 @@
 - [ ] 실제 Windows PC 에서 확인: SmartScreen, Edge 앱 창, PDF 인쇄 창(Edge PDF 보기) · Ctrl+P, 탐색기 /select, 한글 경로 · OneDrive 폴더
 
 ### 작업 기록
+- 2026-11-02 v1.3.4 — 사용자 제보(CUTROAD 에서): Spotlight 에 같은 앱이 두 개(응용 프로그램 + 백업 폴더) 보임. 업데이트 때 이전 버전을 보관하는
+  폴더를 `Support/backup.noindex/MSROAD.app`(.noindex = Spotlight 가 안 찾음)로 바꾸고, 바꾸기 · 되돌리기 뒤 `lsregister -u` 로 보관본을 macOS 목록에서 지움.
+  엔진이 켜질 때 예전 `Support/backup/MSROAD.app` 이 있으면 새 폴더로 옮김(migrateBackup). 맥 시험 A1b 추가. Windows 경로는 그대로.
 - 2026-10-30 v1.3.3 (맥 · Windows) — 사용자 요청: **쪽마다 다른 틀**(예: 1쪽 3곡, 2쪽 2곡). page.frame · page.grid 가 있으면 그 쪽만 그 틀,
   없으면 set.frame(= 새 쪽의 기본 틀). layOf(set, pi) 가 쪽의 틀을 돌려주고 slotsOf · dividersOf · placeOf(set, it, pi) · buildSpec · pageDOM 이 그걸 씀.
   오른쪽 '이 페이지 틀'(아무것도 안 골랐을 때, 6칸) · '모든 페이지와 같게'. 세트 틀과 같은 걸 고르면 page.frame 을 지움.
@@ -155,7 +158,7 @@ engine/launcher_windows.go  MSROAD.exe 를 두 번 누르면: 이미 켜져 있�
 engine/platform.go          isWindows · uiOS()(MSROAD_FAKE_OS 로 리눅스에서 Windows 화면 시험) · noHEIC()
 engine/fsapi.go             앱 안 폴더 고르기: 바탕 화면 · 문서 · 다운로드 · 사진 · 음악 · OneDrive · 드라이브(C~Z), 새 폴더
 engine/gothumb.go           sips 없을 때 썸네일(JPG · PNG · GIF → JPEG, EXIF 회전). 그 밖은 원본을 그대로 보냄
-engine/update.go            Windows: releases/latest-win.json → MSROAD-win-<v>.zip(MSROAD.exe + version.txt), 백업 Support/backup/MSROAD.exe
+engine/update.go            Windows: releases/latest-win.json → MSROAD-win-<v>.zip(MSROAD.exe + version.txt), 백업 Support/backup/MSROAD.exe (맥은 Support/backup.noindex/MSROAD.app, 1.3.4~)
 scripts/build-win.sh        리눅스에서 빌드(go-winres 아이콘) → releases/MSROAD-win-<v>.zip · latest-win.json · dist/MSROAD-Windows.zip(+ 사용 가이드)
 docs/guide-win.html         Windows 사용 가이드 원본 → `python3 scripts/guide.py win`
 ```
