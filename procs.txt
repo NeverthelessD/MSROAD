@@ -1,0 +1,5 @@
+--- A 실행 중
+ 3548     1 S    /Applications/MSROAD.app/Contents/MacOS/MSROAD
+ 3555  3548 S    /Users/runner/Library/Application Support/MSROAD/bin/msroad-engine
+ 3556  3555 S    /Users/runner/Library/Application Support/MSROAD/bin/msroad-engine
+--- D 종료 뒤
