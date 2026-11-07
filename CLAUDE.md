@@ -2,8 +2,9 @@
 
 **Read `PROJECT_NOTES.md` first** (structure, decisions, progress checklist) and update it at the end of every task.
 MSROAD is a personal macOS (Apple Silicon) + Windows 10/11 sheet-music sorter/viewer/editor/printer for **Nevertheless_D**, who is not a programmer.
-Talk to them in Korean, in plain words. Never ask them to use Terminal. It follows the same "script-type app" pattern
-as their YTROAD and SROAD apps (bash launcher + Go engine + web UI in a Chrome `--app` window, self-update from `releases/latest.json`).
+Talk to them in Korean, in plain words. Never ask them to use Terminal. Like their other ROAD apps (SROAD, YTROAD, PaperROAD) it is a
+real Dock app (Swift shell + WKWebView window) with a Go engine and web UI, self-updating from `releases/latest.json`.
+(Before 1.1.0 it was a "script-type app": bash launcher + Chrome `--app` window — that is history, not the current structure.)
 Never mention GitHub (or the repo name) in anything the user sees.
 
 **Since 1.1.0 MSROAD.app is a real, visible Dock app** (Swift shell `app/shell/main.swift`, WKWebView window); the Go engine runs

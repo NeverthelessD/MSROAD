@@ -31,6 +31,8 @@
 - [ ] 실제 Windows PC 에서 확인: SmartScreen, Edge 앱 창, PDF 인쇄 창(Edge PDF 보기) · Ctrl+P, 탐색기 /select, 한글 경로 · OneDrive 폴더
 
 ### 작업 기록
+- 2026-11-08 노트만 수정 — CLAUDE.md 첫머리와 「결정 사항 › 방식」이 1.0.x 시절(bash 실행기 + Chrome 창) 설명 그대로라 다른 Claude 가
+  지금 구조로 오해했어요. 지금 구조(Dock 앱 · Swift 껍데기 · 지킴이)로 바로잡고 예전 방식은 '지난 방식'으로 표시. 앱 코드는 그대로.
 - 2026-11-02 v1.3.4 — 사용자 제보(CUTROAD 에서): Spotlight 에 같은 앱이 두 개(응용 프로그램 + 백업 폴더) 보임. 업데이트 때 이전 버전을 보관하는
   폴더를 `Support/backup.noindex/MSROAD.app`(.noindex = Spotlight 가 안 찾음)로 바꾸고, 바꾸기 · 되돌리기 뒤 `lsregister -u` 로 보관본을 macOS 목록에서 지움.
   엔진이 켜질 때 예전 `Support/backup/MSROAD.app` 이 있으면 새 폴더로 옮김(migrateBackup). 맥 시험 A1b 추가. Windows 경로는 그대로.
@@ -200,13 +202,14 @@ docs/            MSROAD_사용가이드.png · guide.html (이미지 원본, 고
 화면은 Playwright(Chromium)로. 업데이트 테스트: 리눅스 엔진을 `msroad-engine` 이름으로 넣은 가짜 MSROAD.app + HOME 을 임시 폴더로.
 
 ### 맥에서만 확인되는 것
-osascript 폴더 선택 창, sips 썸네일/HEIC 변환(특히 WEBP · PDF 첫 쪽), Finder 보기, Chrome 앱 창, Gatekeeper 경고, 실제 iCloud 폴더 이름 바꾸기.
+osascript 폴더 선택 창, sips 썸네일/HEIC 변환(특히 WEBP · PDF 첫 쪽), Finder 보기, 앱 창(WKWebView), Gatekeeper 경고, 실제 iCloud 폴더 이름 바꾸기.
 
 ## 결정 사항
 
 - **GitHub 에는 늘 최신판 zip 1개만**: 업데이트를 내보낼 때마다 `scripts/publish-download.sh` 가 앱 + 가이드 zip 을 `download/` 에 정해진 이름으로 바꿔 넣고 다른 파일은 지워요(release.sh 가 자동으로 불러요. GitHub 릴리스 페이지는 이 작업 환경에서 만들 수 없어 저장소 폴더를 써요). `releases/` 의 업데이트용 zip 도 현재 버전만 남겨요 — 설치된 앱은 latest.json 이 가리키는 zip 만 받고, '되돌리기'는 맥 안의 백업을 써서 예전 zip 이 필요 없어요.
-- 방식: YTROAD/SROAD와 동일. `MSROAD.app/Contents/MacOS/MSROAD` = bash 실행기 → Go 엔진을
-  `~/Library/Application Support/MSROAD/bin/`에 복사해 127.0.0.1 + 무작위 토큰으로 띄우고, Chrome/Edge/Brave `--app` 창(없으면 기본 브라우저)으로 화면을 연다.
+- 방식(1.1.0~, SROAD · YTROAD · PaperROAD 와 같음): `MSROAD.app/Contents/MacOS/MSROAD` = Swift 껍데기(Dock 에 보이는 앱, WKWebView 창) → Go 엔진을
+  `~/Library/Application Support/MSROAD/bin/`에 복사해 지킴이 → 엔진(127.0.0.1 + 토큰)으로 앱이 켜져 있는 동안만 띄운다.
+  (1.0.x 까지는 bash 실행기 + Chrome/Edge/Brave `--app` 창이었어요 — 지난 방식이라 참고하지 말 것)
 - Apple Silicon 전용 (arm64). Windows 버전은 나중에 따로 요청 예정 → 엔진은 OS 의존 부분을 분리해 둔다.
 - 업데이트: 이 저장소의 `releases/latest.json`을 6시간마다 + 켤 때 확인, 자동 설치(기본 켬). 수동 '업데이트 확인' 버튼, 버전 배지, 이전 버전 되돌리기.
 - 화면 모드: 시스템 설정 따르기(기본) / 라이트 / 다크.
