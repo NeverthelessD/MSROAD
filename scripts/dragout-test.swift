@@ -1,8 +1,7 @@
 // MSROAD '끌어서 다른 앱에 넣기' 시험 (맥 빌드 서버 smoke-mac.sh 가 불러요, 1.3.5)
-// 앱 창의 악보 카드를 진짜 마우스처럼 누르고 끌어서, 맥의 끌기 보드(drag pasteboard)에 원본 파일이 올라갔는지 봐요.
+// 이 시험이 '다른 앱' 역할을 해요: 화면 왼쪽 아래에 파일을 받는 작은 창을 띄우고, MSROAD 창의 악보 카드를
+// 진짜 마우스처럼 눌러 그 창까지 끌어다 놓아요. 받은 파일이 원본 파일(경로 · 크기 그대로)이면 마지막 줄에 "ok …", 0 으로 끝나요.
 // 쓰는 법: swift dragout-test.swift <앱 이름> <창 안 x> <창 안 y(제목 막대 아래 화면 기준)> <원본 파일 경로…>
-// 끌기 보드에 그 원본 파일들이 그대로 있으면 마지막 줄에 "ok …" 를 찍고 0 으로 끝나요.
-// 놓는 곳: 창 왼쪽 바깥(바탕 화면)이 보이면 거기, 아니면 창 제목 막대(취소). 진행 기록(시각 포함)을 줄마다 찍어요.
 import Cocoa
 
 let args = CommandLine.arguments
@@ -21,49 +20,76 @@ func bounds() -> CGRect? {
     return nil
 }
 
-let pb = NSPasteboard(name: .drag)
-var seenCount = pb.changeCount
-var got: [String] = []
-func watch(_ label: String) {
-    if pb.changeCount != seenCount {
-        seenCount = pb.changeCount
+func finish(_ line: String, _ code: Int32) -> Never { print(line); fflush(stdout); exit(code) }
+
+/// 파일을 받는 '다른 앱' 창의 내용
+final class DropView: NSView {
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        registerForDraggedTypes([.fileURL, .URL, .tiff, .png])
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.systemYellow.cgColor
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func draggingEntered(_ s: NSDraggingInfo) -> NSDragOperation {
+        log("받는 창에 들어옴: types=\(s.draggingPasteboard.types?.map { $0.rawValue } ?? []) mask=\(s.draggingSourceOperationMask.rawValue)")
+        return .copy
+    }
+    override func draggingUpdated(_ s: NSDraggingInfo) -> NSDragOperation { .copy }
+    override func performDragOperation(_ s: NSDraggingInfo) -> Bool {
+        let pb = s.draggingPasteboard
         let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
-        let paths = urls.map { norm($0.path) }
-        if !paths.isEmpty { got = paths }
-        log("끌기 보드 바뀜(\(label)): \(paths.map { ($0 as NSString).lastPathComponent }) types=\(pb.types?.map { $0.rawValue } ?? [])")
+        let got = urls.map { norm($0.path) }
+        let sizes = urls.map { (try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int) ?? -1 }
+        let names = got.map { ($0 as NSString).lastPathComponent }
+        log("놓음: \(names) 크기=\(sizes) types=\(pb.types?.map { $0.rawValue } ?? [])")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if got == expected { finish("ok \(got.count) [\(names.joined(separator: ", "))] 크기 \(sizes)", 0) }
+            finish("bad got=\(names) want=\(expected.map { ($0 as NSString).lastPathComponent })", 1)
+        }
+        return true
     }
 }
+
+let app = NSApplication.shared
+app.setActivationPolicy(.accessory)
+guard let b = bounds(), let screen = NSScreen.screens.first else { finish("no-window", 2) }
+// 받는 창: 화면 왼쪽 아래 (Dock 위), 맨 앞에 떠 있게
+let dropCG = CGRect(x: 10, y: screen.frame.height - 330, width: 260, height: 200)   // 화면 위쪽 기준(CG) 자리
+let win = NSWindow(contentRect: NSRect(x: dropCG.minX, y: screen.frame.height - dropCG.maxY, width: dropCG.width, height: dropCG.height),
+                   styleMask: [.borderless], backing: .buffered, defer: false)
+win.level = .floating
+win.contentView = DropView(frame: NSRect(origin: .zero, size: dropCG.size))
+win.orderFrontRegardless()
+
 func post(_ type: CGEventType, _ p: CGPoint, wait: useconds_t = 40_000) {
     CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
     usleep(wait)
-    watch("\(type.rawValue)")
 }
 
-guard let b = bounds() else { print("no-window"); exit(2) }
-pb.clearContents(); seenCount = pb.changeCount
-let start = CGPoint(x: b.minX + cx, y: b.minY + 28 + cy)   // 28 = 제목 막대 높이
-log("창 \(b) · 누르는 곳 \(start)")
-post(.mouseMoved, start, wait: 300_000)
-post(.leftMouseDown, start, wait: 150_000)
-var p = start
-for i in 1...20 {
-    p = CGPoint(x: start.x + CGFloat(i) * 6, y: start.y + CGFloat(i) * 2)
-    post(.leftMouseDragged, p)
+Thread.detachNewThread {
+    usleep(800_000)
+    let start = CGPoint(x: b.minX + cx, y: b.minY + 28 + cy)   // 28 = 제목 막대 높이
+    log("창 \(b) · 누르는 곳 \(start) · 받는 창 \(dropCG)")
+    post(.mouseMoved, start, wait: 300_000)
+    post(.leftMouseDown, start, wait: 150_000)
+    var p = start
+    for i in 1...20 {
+        p = CGPoint(x: start.x + CGFloat(i) * 6, y: start.y + CGFloat(i) * 2)
+        post(.leftMouseDragged, p)
+    }
+    usleep(700_000)
+    let target = CGPoint(x: dropCG.midX, y: dropCG.midY)
+    for i in 1...25 {
+        let t = CGFloat(i) / 25
+        post(.leftMouseDragged, CGPoint(x: p.x + (target.x - p.x) * t, y: p.y + (target.y - p.y) * t))
+    }
+    for _ in 0..<5 { post(.leftMouseDragged, CGPoint(x: target.x + 1, y: target.y), wait: 80_000) }
+    usleep(400_000)
+    post(.leftMouseUp, target, wait: 200_000)
+    log("마우스 뗌 @\(Int(target.x)),\(Int(target.y))")
+    usleep(4_000_000)
+    post(.leftMouseUp, target, wait: 100_000)   // 혹시 늦게 시작된 끌기가 있으면 끝내요
+    DispatchQueue.main.async { finish("bad no-drop (받는 창에 아무것도 안 놓임)", 1) }
 }
-log("끌기 이동 끝 — 누른 채로 기다림")
-for _ in 0..<20 { usleep(100_000); watch("기다림") }
-// 놓을 곳: 창 왼쪽 바깥에 바탕 화면이 보이면 거기(Finder 가 복사), 아니면 창 제목 막대
-let desk = b.minX > 60 ? CGPoint(x: b.minX / 2, y: b.midY) : CGPoint(x: b.minX + 200, y: b.minY + 14)
-for i in 1...20 {
-    let t = CGFloat(i) / 20
-    post(.leftMouseDragged, CGPoint(x: p.x + (desk.x - p.x) * t, y: p.y + (desk.y - p.y) * t))
-}
-usleep(300_000); watch("놓기 전")
-post(.leftMouseUp, desk, wait: 1_200_000)
-log("놓음 @\(Int(desk.x)),\(Int(desk.y))")
-usleep(1_000_000); watch("놓은 뒤")
-post(.leftMouseUp, desk, wait: 300_000)   // 혹시 늦게 시작된 끌기가 있으면 끝내요
-let names = got.map { ($0 as NSString).lastPathComponent }.joined(separator: ", ")
-if got == expected { print("ok \(got.count) [\(names)] drop@\(Int(desk.x)),\(Int(desk.y))"); exit(0) }
-print("bad got=[\(names)] want=\(expected.map { ($0 as NSString).lastPathComponent })")
-exit(1)
+app.run()

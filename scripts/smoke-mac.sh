@@ -78,15 +78,9 @@ swift "$ROOT/scripts/dragout-test.swift" MSROAD 750 330 "$SHEETS/주의은혜라
 K2=$(tail -1 "$OUT/dragout-2.txt")
 screencapture -x "$OUT/shot-dragout-multi.png"
 printf '%s\n%s\n' "$K1" "$K2" > "$OUT/dragout-test.txt"
-ls -la "$HOME/Desktop" >> "$OUT/dragout-test.txt" 2>&1
-check "K1 카드를 끌면 원본 파일이 넘어감 ($K1)" bash -c "case '$K1' in ok*) exit 0;; *) exit 1;; esac"
+check "K1 카드를 다른 앱 창에 끌어 놓으면 원본 파일이 들어감 ($K1)" bash -c "case '$K1' in ok*) exit 0;; *) exit 1;; esac"
 check "K2 여러 장 악보는 원본 파일이 모두 넘어감 ($K2)" bash -c "case '$K2' in ok*) exit 0;; *) exit 1;; esac"
 check "K3 앱 기록에 '끌어 넣기 시작' 남음" grep -q "끌어 넣기 시작: 원본" "$SUP/launcher.log"
-if [ -f "$HOME/Desktop/구주의십자가보혈로Ab.png" ]; then
-  check "K4 바탕 화면에 놓은 파일 = 원본과 같은 크기" test "$(stat -f%z "$HOME/Desktop/구주의십자가보혈로Ab.png")" = "$(stat -f%z "$SHEETS/구주의십자가보혈로Ab.png")"
-else
-  echo "INFO  K4 바탕 화면에 놓인 파일이 없음 (빌드 서버 화면에 바탕 화면이 안 보일 수 있어요)" | tee -a "$RES"
-fi
 check "K5 끈 뒤에도 앱 · 엔진 그대로" bash -c "test '$(app_pid)' = '$APID' && curl -fs -m 2 -H 'x-token: $(tok)' http://127.0.0.1:$(port)/api/ping >/dev/null"
 
 echo "▶ C. 엔진이 고장으로 꺼지면 지킴이가 다시 켬"
