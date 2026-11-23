@@ -174,8 +174,8 @@ function cardHTML(s, hits) {
   const mt = [];
   if (others.length) mt.push(`<span>다른 키</span>${others.slice(0, 4).map((k) => plate(k, 'ghost')).join('')}${others.length > 4 ? `<span>+${others.length - 4}</span>` : ''}`);
   else if (s.dir) mt.push(`<span class="dir">${esc(s.dir)}</span>`);
-  return `<div class="card r${s._road} ${multi ? 'multi' : ''}" data-id="${s.id}" tabindex="0"${IS_SHELL ? ' draggable="true"' : ''}>
-    <div class="sheet"><img loading="lazy" decoding="async" alt="" src="${thumbURL(s)}" data-kind="${p0.kind}">
+  return `<div class="card r${s._road} ${multi ? 'multi' : ''}" data-id="${s.id}" tabindex="0">
+    <div class="sheet"><img loading="lazy" decoding="async" alt="" src="${thumbURL(s)}" data-kind="${p0.kind}"${IS_SHELL ? ' draggable="false"' : ''}>
       <div class="tl">${s.chord ? plate(s.chord) : ''}</div>${s.new ? '<span class="newtag">새 악보</span>' : ''}
       <div class="badges">${pdf ? '<span class="badge">PDF</span>' : ''}${multi ? `<span class="badge">${s.pages.length}장</span>` : ''}</div></div>
     <div class="cap"><b title="${esc(s.pages.map((p) => p.name).join('\n'))}">${highlight(s, hits)}</b><div class="mt">${mt.join('')}</div></div>
@@ -349,8 +349,10 @@ document.addEventListener('mousedown', (e) => { if (!e.target.closest('#ctx')) $
 
 // ── 끌어서 다른 앱에 넣기 (1.3.5, 맥 앱 창) ──
 // 앱 창(WKWebView)이 그림을 그냥 끌면 화면에 보이는 작은 그림(썸네일)이 넘어가요.
-// 그래서 끌기는 맥 쪽(껍데기 main.swift 'dragFiles')에 맡기고 원본 파일(여러 장이면 모두)을 넘겨요
+// 그래서 맥 앱 창에서는 WebKit 의 끌기를 끄고(그림 draggable=false), 카드를 누른 채 움직이면
+// 맥 쪽(껍데기 main.swift 'dragFiles')이 원본 파일(여러 장이면 모두)로 끌기를 시작해요
 // → Finder 에서 끈 것과 똑같이, 다른 앱에 원본 해상도 그대로 들어가요.
+// (WebKit 의 dragstart 를 막는 방식은 WebKit 이 끌기 보드를 비워 버려서 쓰지 않아요 — 빌드 서버 시험 K 에서 확인)
 const shellBridge = () => window.webkit?.messageHandlers?.msroad;
 const pathCache = new Map();
 let draggedOut = false;
@@ -380,30 +382,40 @@ function dragGhost(sheet, w, h) {
     return cv.toDataURL('image/png');
   } catch { return ''; }
 }
+function startDragOut(s, card, x, y) {
+  draggedOut = true;
+  const sheet = card.querySelector('.sheet') || card;
+  const r = sheet.getBoundingClientRect();
+  const k = Math.min(1, 200 / Math.max(r.width, r.height, 1));
+  const w = r.width * k, h = r.height * k;
+  const ox = Math.max(0, Math.min(w, (x - r.left) * k)), oy = Math.max(0, Math.min(h, (y - r.top) * k));
+  const image = dragGhost(sheet, w, h);
+  pathsOf(s).then((paths) => {
+    if (!paths.length) return;
+    return shellBridge().postMessage({ type: 'dragFiles', paths, image, w, h, ox, oy });
+  }).catch((err) => console.warn('끌기', err));
+}
 if (IS_SHELL) {
+  document.documentElement.classList.add('shell');
+  let press = null; // 카드를 누른 곳
   $('#main').addEventListener('pointerdown', (e) => {
     draggedOut = false;
+    press = null;
     const card = e.target.closest('.card');
     const s = card && S.byId.get(card.dataset.id);
-    if (s && e.button === 0) pathsOf(s); // 끌기 시작 전에 미리 경로를 받아 둬요
+    if (!s || e.button !== 0 || e.target.closest('button') || !shellBridge()) return;
+    pathsOf(s); // 끌기 시작 전에 미리 경로를 받아 둬요
+    press = { s, card, x: e.clientX, y: e.clientY };
   });
-  $('#main').addEventListener('dragstart', (e) => {
-    const card = e.target.closest('.card');
-    const s = card && S.byId.get(card.dataset.id);
-    if (!s || !shellBridge()) return;
-    e.preventDefault();
-    draggedOut = true;
-    const sheet = card.querySelector('.sheet') || card;
-    const r = sheet.getBoundingClientRect();
-    const k = Math.min(1, 200 / Math.max(r.width, r.height, 1));
-    const w = r.width * k, h = r.height * k;
-    const ox = (e.clientX - r.left) * k, oy = (e.clientY - r.top) * k;
-    const image = dragGhost(sheet, w, h);
-    pathsOf(s).then((paths) => {
-      if (!paths.length) return;
-      return shellBridge().postMessage({ type: 'dragFiles', paths, image, w, h, ox, oy });
-    }).catch((err) => console.warn('끌기', err));
+  addEventListener('pointermove', (e) => {
+    if (!press) return;
+    if (!(e.buttons & 1)) { press = null; return; }
+    if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < 5) return;
+    const p = press; press = null;
+    startDragOut(p.s, p.card, p.x, p.y);
   });
+  addEventListener('pointerup', () => { press = null; });
+  addEventListener('pointercancel', () => { press = null; });
 }
 
 // ── 검색 ──

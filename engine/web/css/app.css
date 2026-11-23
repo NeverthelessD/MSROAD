@@ -255,6 +255,7 @@ input[type=text] { user-select: text; -webkit-user-select: text; }
 .card.multi:hover .sheet { box-shadow: 0 0 0 1px var(--paper-edge), 4px 4px 0 -1px var(--paper), 4px 4px 0 0 var(--paper-edge), 0 14px 28px rgba(20, 15, 60, .16); }
 .card img, .card canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
 .card img { opacity: 0; transition: opacity .25s; }
+.shell .card, .shell .card * { -webkit-user-drag: none; } /* 맥 앱 창: 끌기는 맥 쪽이 원본 파일로 (main.js) */
 .card img.ok { opacity: 1; }
 .card .ph { position: absolute; inset: 0; display: grid; place-items: center; color: #b9b7cc; }
 .card .ph b { font: 700 11px "Unbounded", sans-serif; color: #a5a3bb; }
