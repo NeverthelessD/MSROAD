@@ -66,13 +66,16 @@ case "$MOVE" in
 esac
 
 echo "▶ K. 악보 카드를 끌어 다른 앱에 넣기 → 원본 파일(원본 해상도)이 넘어감 (1.3.5)"
-# 카드 자리(창 안 화면 기준)는 리눅스 Playwright 로 1380×872 화면에서 잰 값: 첫 카드 = 구주의십자가보혈로Ab, 3번째 = 주의은혜라(2장)
+# 카드 자리(창 안 화면 기준): 리눅스 Playwright(1380×872)와 빌드 서버 화면(1024×768) 둘 다에서 카드 안인 곳
+# 첫 카드 = 구주의십자가보혈로Ab, 3번째 = 주의은혜라(2장)
 osascript -e 'tell application "MSROAD" to activate' >/dev/null 2>&1; sleep 1
 screencapture -x "$OUT/shot-dragout-before.png"
-K1=$(swift "$ROOT/scripts/dragout-test.swift" MSROAD 367 342 "$SHEETS/구주의십자가보혈로Ab.png" 2>&1 | tail -1)
+swift "$ROOT/scripts/dragout-test.swift" MSROAD 330 330 "$SHEETS/구주의십자가보혈로Ab.png" > "$OUT/dragout-1.txt" 2>&1
+K1=$(tail -1 "$OUT/dragout-1.txt")
 screencapture -x "$OUT/shot-dragout-after.png"
 sleep 1
-K2=$(swift "$ROOT/scripts/dragout-test.swift" MSROAD 808 342 "$SHEETS/주의은혜라A_1.png" "$SHEETS/주의은혜라A_2.png" 2>&1 | tail -1)
+swift "$ROOT/scripts/dragout-test.swift" MSROAD 750 330 "$SHEETS/주의은혜라A_1.png" "$SHEETS/주의은혜라A_2.png" > "$OUT/dragout-2.txt" 2>&1
+K2=$(tail -1 "$OUT/dragout-2.txt")
 screencapture -x "$OUT/shot-dragout-multi.png"
 printf '%s\n%s\n' "$K1" "$K2" > "$OUT/dragout-test.txt"
 ls -la "$HOME/Desktop" >> "$OUT/dragout-test.txt" 2>&1

@@ -46,7 +46,7 @@ enum Log {
         }
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")
-        df.dateFormat = "MM-dd HH:mm:ss"
+        df.dateFormat = "MM-dd HH:mm:ss.SSS"
         let line = "\(df.string(from: Date())) [앱 \(getpid())] \(message)\n"
         guard let data = line.data(using: .utf8) else { return }
         if let h = try? FileHandle(forWritingTo: url) {
@@ -549,14 +549,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func dragFiles(_ b: [String: Any], reply: @escaping (Any?, String?) -> Void) {
         guard let window = window, let web = web else { reply(["ok": false, "reason": "no-window"], nil); return }
         // 이미 마우스를 뗐다면(아주 짧게 끌었을 때) 시작하지 않아요
-        guard NSEvent.pressedMouseButtons & 1 == 1 else { reply(["ok": false, "reason": "released"], nil); return }
+        guard NSEvent.pressedMouseButtons & 1 == 1 else {
+            Log.write("끌어 넣기 안 함: 이미 마우스를 뗐어요")
+            reply(["ok": false, "reason": "released"], nil); return
+        }
         let fm = FileManager.default
         let urls: [URL] = ((b["paths"] as? [String]) ?? []).prefix(60).compactMap { p in
             var dir: ObjCBool = false
             guard fm.fileExists(atPath: p, isDirectory: &dir), !dir.boolValue else { return nil }
             return URL(fileURLWithPath: p)
         }
-        guard !urls.isEmpty else { reply(["ok": false, "reason": "no-files"], nil); return }
+        guard !urls.isEmpty else {
+            Log.write("끌어 넣기 안 함: 원본 파일을 찾지 못했어요")
+            reply(["ok": false, "reason": "no-files"], nil); return
+        }
 
         func num(_ k: String, _ d: CGFloat) -> CGFloat {
             if let v = b[k] as? Double { return CGFloat(v) }
@@ -593,7 +599,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard let ev = event else { reply(["ok": false, "reason": "no-event"], nil); return }
         let session = web.beginDraggingSession(with: items, event: ev, source: fileDrag)
         session.animatesToStartingPositionsOnCancelOrFail = true
-        Log.write("끌어 넣기 시작: 원본 \(urls.count)개 (\(urls.map { $0.lastPathComponent }.joined(separator: ", ")))")
+        let age = Int((ProcessInfo.processInfo.systemUptime - ev.timestamp) * 1000)
+        Log.write("끌어 넣기 시작: 원본 \(urls.count)개 (\(urls.map { $0.lastPathComponent }.joined(separator: ", "))) · 이벤트 \(ev.type == .leftMouseDown ? "누르기" : "끌기") \(age)ms 전\(web.lastMouse === ev ? "" : " (만든 이벤트)")")
         reply(["ok": true, "count": urls.count], nil)
     }
 
