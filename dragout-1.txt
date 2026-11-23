@@ -1,0 +1,6 @@
+08:11:15.356 창 (84.0, 27.0, 1024.0, 681.0) · 누르는 곳 (414.0, 385.0) · 받는 창 (10.0, 438.0, 260.0, 200.0)
+08:11:18.625 받는 창 보임=true 번호=33 화면위=true
+08:11:20.320 받는 창에 들어옴: types=["public.file-url", "CorePasteboardFlavorType 0x6675726C", "dyn.ah62d4rv4gu8y6y4grf0gn5xbrzw1gydcr7u1e3cytf2gn", "NSFilenamesPboardType", "dyn.ah62d4rv4gu8yc6durvwwaznwmuuha2pxsvw0e55bsmwca7d3sbwu", "Apple URL pasteboard type"] mask=1
+08:11:22.352 놓음: ["구주의십자가보혈로Ab.png"] 크기=[320534] types=["public.file-url", "CorePasteboardFlavorType 0x6675726C", "dyn.ah62d4rv4gu8y6y4grf0gn5xbrzw1gydcr7u1e3cytf2gn", "NSFilenamesPboardType", "dyn.ah62d4rv4gu8yc6durvwwaznwmuuha2pxsvw0e55bsmwca7d3sbwu", "Apple URL pasteboard type"]
+08:11:22.595 마우스 뗌 @140,538
+ok 1 [구주의십자가보혈로Ab.png] 크기 [320534]

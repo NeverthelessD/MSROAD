@@ -1,0 +1,27 @@
+PASS  A1 앱을 열면 엔진이 준비됨
+PASS  A1b 이전 버전 보관본을 Spotlight 가 안 찾는 폴더(backup.noindex)로 옮김
+PASS  A2 엔진이 Dock 앱 방식으로 켜짐(shell=native)
+PASS  A3 주소가 47917
+PASS  A4 악보 6개를 읽음 (읽은 수: 6)
+PASS  A5 화면이 앱 창(WKWebView)에서 열림
+PASS  A6 엔진이 MSROAD 앱의 자식 (앱 2450 → 지킴이 2459 → 엔진 2460)
+PASS  B1 다시 열기 뒤에도 앱·엔진 그대로
+PASS  M1 창 맨 위를 끌면 창이 움직임 (moved 84 2)
+PASS  K1 카드를 다른 앱 창에 끌어 놓으면 원본 파일이 들어감 (ok 1 [구주의십자가보혈로Ab.png] 크기 [320534])
+FAIL  K2 여러 장 악보는 원본 파일이 모두 넘어감 (bad no-drop (받는 창에 아무것도 안 놓임))
+PASS  K3 앱 기록에 '끌어 넣기 시작' 남음
+PASS  K5 끈 뒤에도 앱 · 엔진 그대로
+PASS  C1 엔진 다시 켜짐
+PASS  C2 앱은 그대로
+PASS  P1 배치를 PDF로 만듦
+PASS  P2 맥 인쇄 기능으로 인쇄됨 (파일로 인쇄, 코드 0)
+PASS  P3 세트를 저장하고 다시 읽음
+PASS  P4 인쇄 시험 뒤에도 앱은 1개
+PASS  D1 앱·엔진 모두 꺼짐
+PASS  E1 앱·엔진 모두 꺼짐
+PASS  F1 남은 엔진 없음
+PASS  G1 새로 열린 앱이 엔진을 켬
+PASS  G2 앱이 새로 열림 (3603 → 3630)
+PASS  H1 다시 열린 앱이 엔진을 켬
+PASS  H2 앱 하나만 떠 있음 (1개)
+PASS  H3 끝나면 모두 꺼짐
