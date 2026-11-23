@@ -280,8 +280,40 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
         switch type {
         case "print": app.printPDF(body, reply: replyHandler)
         case "savePDF": app.savePDF(body, reply: replyHandler)
+        case "dragFiles": app.dragFiles(body, reply: replyHandler)
         default: replyHandler(nil, "알 수 없는 요청이에요")
         }
+    }
+}
+
+// MARK: - 끌어서 다른 앱에 넣기 (1.3.5)
+// WKWebView 에 맡겨 두면 카드의 작은 그림(썸네일, 640px)이 그대로 넘어가서 다른 앱에 작게 붙었어요.
+// 그래서 화면(main.js)은 끌기가 시작되면 WebKit 의 끌기를 막고 원본 파일 경로를 보내고, 여기서 맥의 끌기를 직접 시작해요.
+// 끌리는 것 = 원본 파일(Finder 에서 끈 것과 같음) → 받는 앱에는 원본 해상도 그대로 들어가요.
+
+final class MSWebView: WKWebView {
+    /// 끌기를 시작할 때 쓸 진짜 마우스 이벤트 (가장 최근 누르기 · 끌기)
+    var lastMouse: NSEvent?
+    override func mouseDown(with event: NSEvent) { lastMouse = event; super.mouseDown(with: event) }
+    override func mouseDragged(with event: NSEvent) { lastMouse = event; super.mouseDragged(with: event) }
+}
+
+final class FileDrag: NSObject, NSDraggingSource {
+    weak var web: MSWebView?
+
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        // 다른 앱에는 '복사'만 (Finder 에 놓아도 원본은 그 자리에 그대로), 이 창 안에 놓으면 아무 일도 없게
+        context == .outsideApplication ? .copy : []
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        Log.write("끌어 넣기 끝: \(operation.contains(.copy) ? "다른 앱에 놓음" : "취소")")
+        // WebKit 은 아직 마우스를 누르고 있다고 알고 있어요 → 뗀 것으로 알려 줘요 (화면은 이 클릭을 무시해요)
+        guard let web = web, let win = web.window,
+              let up = NSEvent.mouseEvent(with: .leftMouseUp, location: win.mouseLocationOutsideOfEventStream, modifierFlags: [],
+                                          timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: win.windowNumber,
+                                          context: nil, eventNumber: 0, clickCount: 1, pressure: 0) else { return }
+        web.mouseUp(with: up)
     }
 }
 
@@ -289,7 +321,8 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, NSWindowDelegate {
     var window: NSWindow!
-    var web: WKWebView!
+    var web: MSWebView!
+    let fileDrag = FileDrag()
     let engine = Engine()
     var quitting = false
     var pageURL: URL?
@@ -410,7 +443,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let bridge = Bridge()
         bridge.app = self
         cfg.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: "msroad")
-        web = WKWebView(frame: NSRect(x: 0, y: 0, width: 1380, height: 900), configuration: cfg)
+        web = MSWebView(frame: NSRect(x: 0, y: 0, width: 1380, height: 900), configuration: cfg)
+        fileDrag.web = web
         web.navigationDelegate = self
         web.uiDelegate = self
         web.allowsMagnification = false
@@ -508,6 +542,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 reply(["error": "PDF를 저장하지 못했어요: \(error.localizedDescription)"], nil)
             }
         }
+    }
+
+    // MARK: 끌어서 다른 앱에 넣기
+
+    func dragFiles(_ b: [String: Any], reply: @escaping (Any?, String?) -> Void) {
+        guard let window = window, let web = web else { reply(["ok": false, "reason": "no-window"], nil); return }
+        // 이미 마우스를 뗐다면(아주 짧게 끌었을 때) 시작하지 않아요
+        guard NSEvent.pressedMouseButtons & 1 == 1 else { reply(["ok": false, "reason": "released"], nil); return }
+        let fm = FileManager.default
+        let urls: [URL] = ((b["paths"] as? [String]) ?? []).prefix(60).compactMap { p in
+            var dir: ObjCBool = false
+            guard fm.fileExists(atPath: p, isDirectory: &dir), !dir.boolValue else { return nil }
+            return URL(fileURLWithPath: p)
+        }
+        guard !urls.isEmpty else { reply(["ok": false, "reason": "no-files"], nil); return }
+
+        func num(_ k: String, _ d: CGFloat) -> CGFloat {
+            if let v = b[k] as? Double { return CGFloat(v) }
+            if let v = b[k] as? Int { return CGFloat(v) }
+            return d
+        }
+        let w = max(24, num("w", 120)), h = max(24, num("h", 160))
+        let ox = num("ox", w / 2), oy = num("oy", h / 2)
+        var ghost: NSImage?
+        if let s = b["image"] as? String, let comma = s.firstIndex(of: ","),
+           let data = Data(base64Encoded: String(s[s.index(after: comma)...])) {
+            ghost = NSImage(data: data)
+        }
+
+        let mouse = web.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let items: [NSDraggingItem] = urls.enumerated().map { i, url in
+            let item = NSDraggingItem(pasteboardWriter: url as NSURL)
+            let off = CGFloat(min(i, 3)) * 6   // 여러 장이면 조금씩 겹쳐 보여요
+            let y = web.isFlipped ? mouse.y - oy + off : mouse.y - (h - oy) - off
+            let img = ghost ?? NSWorkspace.shared.icon(forFile: url.path)
+            item.setDraggingFrame(NSRect(x: mouse.x - ox + off, y: y, width: w, height: h), contents: img)
+            return item
+        }
+
+        var event = web.lastMouse
+        if let e = event, !(e.type == .leftMouseDragged || e.type == .leftMouseDown) || ProcessInfo.processInfo.systemUptime - e.timestamp > 3 {
+            event = nil
+        }
+        if event == nil {
+            event = NSEvent.mouseEvent(with: .leftMouseDragged, location: window.mouseLocationOutsideOfEventStream, modifierFlags: [],
+                                       timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                       context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+        }
+        guard let ev = event else { reply(["ok": false, "reason": "no-event"], nil); return }
+        let session = web.beginDraggingSession(with: items, event: ev, source: fileDrag)
+        session.animatesToStartingPositionsOnCancelOrFail = true
+        Log.write("끌어 넣기 시작: 원본 \(urls.count)개 (\(urls.map { $0.lastPathComponent }.joined(separator: ", ")))")
+        reply(["ok": true, "count": urls.count], nil)
     }
 
     // MARK: WKWebView

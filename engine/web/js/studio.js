@@ -2374,7 +2374,7 @@ on('library', () => { if (E.active) { resolveRefs(); renderAll(); } });
 
 document.addEventListener('keydown', (e) => {
   if (!E.active || $('#modalRoot').children.length) return;
-  const typing = e.target.matches?.('input, textarea');
+  const typing = e.target.matches?.('input, textarea, select, [contenteditable], [contenteditable] *');
   const cmd = e.metaKey || e.ctrlKey;
   if (E.layer === 'crop') {
     if (e.key === 'Enter') { e.preventDefault(); applyCrop(); }
@@ -2388,13 +2388,23 @@ document.addEventListener('keydown', (e) => {
     if (!typing && e.key === 'ArrowRight') { E.pv++; renderPreview(); }
     return;
   }
-  if (E.layer === 'sets') { if (e.key === 'Escape' && E.set) closeLayer(); return; }
+  if (E.layer === 'sets') {
+    if (e.key === 'Escape' && E.set) closeLayer();
+    // ⌫ · ⌘[ = 뒤로: 세트 목록을 닫고, 연 세트가 없으면 '악보 보기'로
+    if (!typing && !e.isComposing && ((e.key === 'Backspace' && !cmd && !e.altKey) || (cmd && e.key === '['))) { e.preventDefault(); if (E.set) closeLayer(); else setMode('view'); }
+    return;
+  }
   if (typing) return;
   if (cmd && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if (cmd && e.key.toLowerCase() === 'f') { e.preventDefault(); $('#stQ')?.focus(); return; }
   if ((e.key === 'Delete' || e.key === 'Backspace') && E.sel) { e.preventDefault(); removeItem(E.sel); return; }
   if ((e.key === 'Delete' || e.key === 'Backspace') && E.tsel) { e.preventDefault(); removeText(E.tsel); return; }
   if (e.key === 'Escape' && (E.sel || E.tsel)) { E.sel = null; E.tsel = null; renderStage(); renderProps(); return; }
+  // ⌫ · ⌘[ = 뒤로 가기 (ROAD 앱 공통): 고른 게 없으면 '악보 보기'로 (고른 게 있으면 위에서 지우기가 먼저)
+  if (!e.isComposing && !e.target.isContentEditable && ((e.key === 'Backspace' && !cmd && !e.altKey) || (cmd && e.key === '['))) {
+    if (!$('#pop') || $('#pop').hidden) { e.preventDefault(); setMode('view'); }
+    return;
+  }
   if (e.key === 'Enter' && E.tsel) { e.preventDefault(); inlineEdit(E.tsel); return; }
   const tf = findText(E.tsel);
   if (tf && e.key.startsWith('Arrow')) {

@@ -56,6 +56,36 @@ echo "▶ B. Dock 아이콘 다시 누르기(reopen)"
 osascript -e 'tell application "MSROAD" to reopen' >/dev/null 2>&1; sleep 1
 check "B1 다시 열기 뒤에도 앱·엔진 그대로" test "$(app_pid)" = "$APID"
 
+echo "▶ M. 창이 앞에 있을 때 맨 위(제목 막대)를 잡고 끌어서 옮기기"
+osascript -e 'tell application "MSROAD" to activate' >/dev/null 2>&1; sleep 1
+MOVE=$(swift "$ROOT/scripts/drag-test.swift" MSROAD 2>&1 | tail -1)
+echo "$MOVE" > "$OUT/drag-test.txt"
+case "$MOVE" in
+  moved*) pass "M1 창 맨 위를 끌면 창이 움직임 ($MOVE)" ;;
+  *) echo "INFO  M1 창 옮기기를 확인하지 못함 ($MOVE) — 빌드 서버가 마우스 흉내를 막았을 수 있어요" | tee -a "$RES" ;;
+esac
+
+echo "▶ K. 악보 카드를 끌어 다른 앱에 넣기 → 원본 파일(원본 해상도)이 넘어감 (1.3.5)"
+# 카드 자리(창 안 화면 기준)는 리눅스 Playwright 로 1380×872 화면에서 잰 값: 첫 카드 = 구주의십자가보혈로Ab, 3번째 = 주의은혜라(2장)
+osascript -e 'tell application "MSROAD" to activate' >/dev/null 2>&1; sleep 1
+screencapture -x "$OUT/shot-dragout-before.png"
+K1=$(swift "$ROOT/scripts/dragout-test.swift" MSROAD 367 342 "$SHEETS/구주의십자가보혈로Ab.png" 2>&1 | tail -1)
+screencapture -x "$OUT/shot-dragout-after.png"
+sleep 1
+K2=$(swift "$ROOT/scripts/dragout-test.swift" MSROAD 808 342 "$SHEETS/주의은혜라A_1.png" "$SHEETS/주의은혜라A_2.png" 2>&1 | tail -1)
+screencapture -x "$OUT/shot-dragout-multi.png"
+printf '%s\n%s\n' "$K1" "$K2" > "$OUT/dragout-test.txt"
+ls -la "$HOME/Desktop" >> "$OUT/dragout-test.txt" 2>&1
+check "K1 카드를 끌면 원본 파일이 넘어감 ($K1)" bash -c "case '$K1' in ok*) exit 0;; *) exit 1;; esac"
+check "K2 여러 장 악보는 원본 파일이 모두 넘어감 ($K2)" bash -c "case '$K2' in ok*) exit 0;; *) exit 1;; esac"
+check "K3 앱 기록에 '끌어 넣기 시작' 남음" grep -q "끌어 넣기 시작: 원본" "$SUP/launcher.log"
+if [ -f "$HOME/Desktop/구주의십자가보혈로Ab.png" ]; then
+  check "K4 바탕 화면에 놓은 파일 = 원본과 같은 크기" test "$(stat -f%z "$HOME/Desktop/구주의십자가보혈로Ab.png")" = "$(stat -f%z "$SHEETS/구주의십자가보혈로Ab.png")"
+else
+  echo "INFO  K4 바탕 화면에 놓인 파일이 없음 (빌드 서버 화면에 바탕 화면이 안 보일 수 있어요)" | tee -a "$RES"
+fi
+check "K5 끈 뒤에도 앱 · 엔진 그대로" bash -c "test '$(app_pid)' = '$APID' && curl -fs -m 2 -H 'x-token: $(tok)' http://127.0.0.1:$(port)/api/ping >/dev/null"
+
 echo "▶ C. 엔진이 고장으로 꺼지면 지킴이가 다시 켬"
 kill -SEGV "$CHILD" 2>/dev/null; sleep 4
 check "C1 엔진 다시 켜짐" ping_ok

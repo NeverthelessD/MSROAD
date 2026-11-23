@@ -412,6 +412,20 @@ func (a *App) routes() http.Handler {
 	api("/api/choose-folder", a.handleChooseFolder)
 	api("/api/reveal", a.handleReveal)
 	api("/api/open-file", a.handleOpenFile)
+	// (1.3.5) 맥 앱 창에서 악보를 끌어 다른 앱에 넣을 때: 원본 파일 경로(여러 장이면 모두)
+	api("/api/paths", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			ID string `json:"id"`
+		}
+		readJSON(r, &in)
+		var paths []string
+		if s, ok := a.lib.sheet(in.ID); ok && in.ID != "" {
+			for _, p := range s.Pages {
+				paths = append(paths, p.path)
+			}
+		}
+		writeJSON(w, map[string]any{"ok": true, "paths": paths})
+	})
 	api("/api/thumb", func(w http.ResponseWriter, r *http.Request) {
 		if p := a.pageFor(w, r); p != nil {
 			a.thumbs.serveThumb(w, r, p)

@@ -246,7 +246,7 @@ function drawBar() {
   const nPages = V.pages.length;
   const pg = V.pages[V.page];
   bar.innerHTML = `
-    <button class="vbtn" data-v="close" title="닫기 (esc)"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <button class="vbtn" data-v="close" title="닫기 (esc · ⌫)"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     <div class="vt">${plate(s.chord, 'lg')}<div style="min-width:0"><b title="${esc(s.title)}">${esc(s.title)}</b><br><small>${esc([s.dir, pg?.label || s.pages[0].name].filter(Boolean).join(' › '))}</small></div></div>
     ${vers.length > 1 ? `<div class="vers"><span class="lb">다른 키</span>${vers.map((v) => `<button class="${v.id === s.id ? 'on' : ''}" data-ver="${v.id}" title="${esc(v.chord || '코드 없음')}${dupChord(v.chord) && v.dir ? ' · ' + esc(v.dir) : ''}">${plate(v.chord)}</button>`).join('')}</div>` : ''}
     <span class="spacer"></span>
@@ -412,6 +412,11 @@ document.addEventListener('keydown', (e) => {
   const k = e.key;
   const mod = e.metaKey || e.ctrlKey;
   if (k === 'Escape') { e.preventDefault(); if (document.fullscreenElement) document.exitFullscreen(); else closeViewer(); return; }
+  // ⌫ · ⌘[ = 뒤로 가기 (ROAD 앱 공통): 미리보기를 닫고 목록으로
+  if (!e.isComposing && !e.target.matches?.('input, textarea, select, [contenteditable]') &&
+      ((k === 'Backspace' && !mod && !e.altKey) || (mod && k === '['))) {
+    e.preventDefault(); if (document.fullscreenElement) document.exitFullscreen(); closeViewer(); return;
+  }
   if (k === 'ArrowRight' || k === 'PageDown' || (k === ' ' && !e.shiftKey)) { e.preventDefault(); next(); return; }
   if (k === 'ArrowLeft' || k === 'PageUp' || (k === ' ' && e.shiftKey)) { e.preventDefault(); prev(); return; }
   if (k === 'ArrowUp') { e.preventDefault(); stepVersion(-1); return; }

@@ -65,7 +65,7 @@ $('#rescanBtn').onclick = () => (S.settings?.folder ? rescan(true) : chooseFolde
 
 // 새 악보 알림 → '보기'를 누르면 새 악보만 모아 봐요
 function announceNew(n, msg) {
-  toast(`🎵 ${msg.replace('{n}', n)}`, { action: '보기', onAction: () => { if (S.query) clearSearch(false); S.road = 'NEW'; S.lane = ''; render(true); } });
+  toast(`🎵 ${msg.replace('{n}', n)}`, { action: '보기', onAction: () => { if (S.query) clearSearch(false); pushNav(); S.road = 'NEW'; S.lane = ''; render(true); } });
 }
 let toldStartup = false;
 function startupNew() {
@@ -126,10 +126,11 @@ function railIntro() {
 }
 $('#rail').addEventListener('click', (e) => {
   const lane = e.target.closest('[data-lane]')?.dataset.lane;
-  if (lane !== undefined) { S.lane = S.lane === lane ? '' : lane; render(true); return; }
+  if (lane !== undefined) { pushNav(); S.lane = S.lane === lane ? '' : lane; render(true); return; }
   const r = e.target.closest('[data-road]')?.dataset.road;
   if (!r) return;
   if (S.query) clearSearch(false);
+  pushNav();
   S.road = r; S.lane = '';
   render(true);
 });
@@ -173,7 +174,7 @@ function cardHTML(s, hits) {
   const mt = [];
   if (others.length) mt.push(`<span>다른 키</span>${others.slice(0, 4).map((k) => plate(k, 'ghost')).join('')}${others.length > 4 ? `<span>+${others.length - 4}</span>` : ''}`);
   else if (s.dir) mt.push(`<span class="dir">${esc(s.dir)}</span>`);
-  return `<div class="card r${s._road} ${multi ? 'multi' : ''}" data-id="${s.id}" tabindex="0">
+  return `<div class="card r${s._road} ${multi ? 'multi' : ''}" data-id="${s.id}" tabindex="0"${IS_SHELL ? ' draggable="true"' : ''}>
     <div class="sheet"><img loading="lazy" decoding="async" alt="" src="${thumbURL(s)}" data-kind="${p0.kind}">
       <div class="tl">${s.chord ? plate(s.chord) : ''}</div>${s.new ? '<span class="newtag">새 악보</span>' : ''}
       <div class="badges">${pdf ? '<span class="badge">PDF</span>' : ''}${multi ? `<span class="badge">${s.pages.length}장</span>` : ''}</div></div>
@@ -292,6 +293,7 @@ function placeholder(s) {
 }
 
 $('#main').addEventListener('click', async (e) => {
+  if (draggedOut) { draggedOut = false; return; } // 방금 다른 앱으로 끌어 놓은 거라면 미리보기를 열지 않아요
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (act === 'choose') return chooseFolder();
   const rec = e.target.closest('[data-recent]')?.dataset.recent;
@@ -305,7 +307,7 @@ $('#main').addEventListener('click', async (e) => {
     return;
   }
   const lane = e.target.closest('[data-lane]');
-  if (lane) { S.lane = lane.dataset.lane; render(true); return; }
+  if (lane) { pushNav(); S.lane = lane.dataset.lane; render(true); return; }
   const card = e.target.closest('.card');
   if (!card) return;
   const s = S.byId.get(card.dataset.id);
@@ -345,6 +347,65 @@ $('#main').addEventListener('contextmenu', (e) => {
 });
 document.addEventListener('mousedown', (e) => { if (!e.target.closest('#ctx')) $('#ctx').hidden = true; });
 
+// ── 끌어서 다른 앱에 넣기 (1.3.5, 맥 앱 창) ──
+// 앱 창(WKWebView)이 그림을 그냥 끌면 화면에 보이는 작은 그림(썸네일)이 넘어가요.
+// 그래서 끌기는 맥 쪽(껍데기 main.swift 'dragFiles')에 맡기고 원본 파일(여러 장이면 모두)을 넘겨요
+// → Finder 에서 끈 것과 똑같이, 다른 앱에 원본 해상도 그대로 들어가요.
+const shellBridge = () => window.webkit?.messageHandlers?.msroad;
+const pathCache = new Map();
+let draggedOut = false;
+function pathsOf(s) {
+  const key = s.id + '|' + s.pages.map((p) => p.name + ':' + p.mod).join('|');
+  if (!pathCache.has(key)) {
+    if (pathCache.size > 300) pathCache.clear();
+    pathCache.set(key, api('/api/paths', { id: s.id }).then((j) => j.paths || []).catch(() => { pathCache.delete(key); return []; }));
+  }
+  return pathCache.get(key);
+}
+// 끌 때 손가락 밑에 보일 작은 그림 (카드에 보이는 모습 그대로)
+function dragGhost(sheet, w, h) {
+  try {
+    const src = sheet.querySelector('img.ok, canvas');
+    if (!src) return '';
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(w * dpr)); cv.height = Math.max(1, Math.round(h * dpr));
+    const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+    const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+    if (sw && sh) {
+      const k = Math.max(cv.width / sw, cv.height / sh); // object-fit: cover, 위쪽 맞춤
+      g.drawImage(src, (cv.width - sw * k) / 2, 0, sw * k, sh * k);
+    }
+    return cv.toDataURL('image/png');
+  } catch { return ''; }
+}
+if (IS_SHELL) {
+  $('#main').addEventListener('pointerdown', (e) => {
+    draggedOut = false;
+    const card = e.target.closest('.card');
+    const s = card && S.byId.get(card.dataset.id);
+    if (s && e.button === 0) pathsOf(s); // 끌기 시작 전에 미리 경로를 받아 둬요
+  });
+  $('#main').addEventListener('dragstart', (e) => {
+    const card = e.target.closest('.card');
+    const s = card && S.byId.get(card.dataset.id);
+    if (!s || !shellBridge()) return;
+    e.preventDefault();
+    draggedOut = true;
+    const sheet = card.querySelector('.sheet') || card;
+    const r = sheet.getBoundingClientRect();
+    const k = Math.min(1, 200 / Math.max(r.width, r.height, 1));
+    const w = r.width * k, h = r.height * k;
+    const ox = (e.clientX - r.left) * k, oy = (e.clientY - r.top) * k;
+    const image = dragGhost(sheet, w, h);
+    pathsOf(s).then((paths) => {
+      if (!paths.length) return;
+      return shellBridge().postMessage({ type: 'dragFiles', paths, image, w, h, ox, oy });
+    }).catch((err) => console.warn('끌기', err));
+  });
+}
+
 // ── 검색 ──
 const q = $('#q');
 let qTimer;
@@ -370,14 +431,38 @@ $('#settingsBtn').onclick = openSettings;
 $('#verBtn').onclick = openUpdate;
 $('#quitBtn').onclick = quitApp;
 
+// ── 뒤로 가기 (⌫ · ⌘[) — ROAD 앱 공통 ──
+// 왼쪽 ROAD · 코드를 옮겨 다닌 기록을 두고, ⌫ 를 누르면 바로 전 화면으로 돌아가요. (찾는 중이면 찾기를 끝내요)
+const navHist = [];
+function pushNav() {
+  const last = navHist[navHist.length - 1];
+  if (last && last.road === S.road && last.lane === S.lane) return;
+  navHist.push({ road: S.road, lane: S.lane });
+  if (navHist.length > 50) navHist.shift();
+}
+function goBack() {
+  if (S.query) { clearSearch(true); return true; }
+  while (navHist.length) {
+    const p = navHist.pop();
+    if (p.road === S.road && p.lane === S.lane) continue;
+    S.road = p.road; S.lane = p.lane;
+    render(true);
+    return true;
+  }
+  if (S.road !== 'ALL' || S.lane) { S.road = 'ALL'; S.lane = ''; render(true); return true; }
+  return false; // 첫 화면이면 아무 일도 안 해요
+}
+
 // ── 단축키 ──
 document.addEventListener('keydown', (e) => {
   if (viewerOpen() || modalOpen() || pickerOpen() || studioActive()) return;
-  const typing = e.target.matches?.('input, textarea');
+  const typing = e.target.matches?.('input, textarea, select, [contenteditable], [contenteditable] *');
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); q.focus(); q.select(); return; }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); chooseFolder(); return; }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'r') { e.preventDefault(); rescan(true); return; }
   if (typing) return;
+  const back = (e.key === 'Backspace' && !e.metaKey && !e.ctrlKey && !e.altKey) || ((e.metaKey || e.ctrlKey) && e.key === '[');
+  if (back && !e.isComposing && $('#ctx').hidden) { e.preventDefault(); goBack(); return; }
   if (e.key === '/') { e.preventDefault(); q.focus(); return; }
   if (e.key === 'Escape' && S.query) { clearSearch(true); return; }
   // 그리드 안에서 화살표로 이동
