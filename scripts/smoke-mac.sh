@@ -70,11 +70,11 @@ echo "▶ K. 악보 카드를 끌어 다른 앱에 넣기 → 원본 파일(원�
 # 첫 카드 = 구주의십자가보혈로Ab, 3번째 = 주의은혜라(2장)
 osascript -e 'tell application "MSROAD" to activate' >/dev/null 2>&1; sleep 1
 screencapture -x "$OUT/shot-dragout-before.png"
-swift "$ROOT/scripts/dragout-test.swift" MSROAD 330 330 "$SHEETS/구주의십자가보혈로Ab.png" > "$OUT/dragout-1.txt" 2>&1
+DRAG_TAG=1 swift "$ROOT/scripts/dragout-test.swift" MSROAD 330 330 "$SHEETS/구주의십자가보혈로Ab.png" > "$OUT/dragout-1.txt" 2>&1
 K1=$(tail -1 "$OUT/dragout-1.txt")
 screencapture -x "$OUT/shot-dragout-after.png"
 sleep 1
-swift "$ROOT/scripts/dragout-test.swift" MSROAD 750 330 "$SHEETS/주의은혜라A_1.png" "$SHEETS/주의은혜라A_2.png" > "$OUT/dragout-2.txt" 2>&1
+DRAG_TAG=2 swift "$ROOT/scripts/dragout-test.swift" MSROAD 750 330 "$SHEETS/주의은혜라A_1.png" "$SHEETS/주의은혜라A_2.png" > "$OUT/dragout-2.txt" 2>&1
 K2=$(tail -1 "$OUT/dragout-2.txt")
 screencapture -x "$OUT/shot-dragout-multi.png"
 printf '%s\n%s\n' "$K1" "$K2" > "$OUT/dragout-test.txt"

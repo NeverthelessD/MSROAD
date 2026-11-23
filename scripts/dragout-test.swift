@@ -62,6 +62,14 @@ win.level = .floating
 win.contentView = DropView(frame: NSRect(origin: .zero, size: dropCG.size))
 win.orderFrontRegardless()
 
+let shotDir = ProcessInfo.processInfo.environment["OUT"] ?? "/tmp"
+let tag = ProcessInfo.processInfo.environment["DRAG_TAG"] ?? "x"
+func shot(_ name: String) {
+    let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    p.arguments = ["-x", "\(shotDir)/shot-dragout-\(tag)-\(name).png"]
+    try? p.run(); p.waitUntilExit()
+}
+
 func post(_ type: CGEventType, _ p: CGPoint, wait: useconds_t = 40_000) {
     CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
     usleep(wait)
@@ -79,6 +87,8 @@ Thread.detachNewThread {
         post(.leftMouseDragged, p)
     }
     usleep(700_000)
+    log("받는 창 보임=\(win.isVisible) 번호=\(win.windowNumber) 화면위=\(win.isOnActiveSpace)")
+    shot("1-start")
     let target = CGPoint(x: dropCG.midX, y: dropCG.midY)
     for i in 1...25 {
         let t = CGFloat(i) / 25
@@ -86,6 +96,7 @@ Thread.detachNewThread {
     }
     for _ in 0..<5 { post(.leftMouseDragged, CGPoint(x: target.x + 1, y: target.y), wait: 80_000) }
     usleep(400_000)
+    shot("2-over")
     post(.leftMouseUp, target, wait: 200_000)
     log("마우스 뗌 @\(Int(target.x)),\(Int(target.y))")
     usleep(4_000_000)
