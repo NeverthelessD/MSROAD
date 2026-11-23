@@ -1,7 +1,7 @@
 // MSROAD — 미리보기
 // 확대 · 축소, 화살표로 넘기기, 전체 화면, 같은 곡의 다른 키로 바로 바꾸기, 여러 장 펼쳐 보기
 // made by. Nevertheless_D
-import { S, $, esc, api, clamp, fileURL, thumbURL, plate, roadOf, versionsOf, toast, L } from './core.js';
+import { S, $, esc, api, clamp, fileURL, thumbURL, plate, roadOf, versionsOf, toast, L, WIN_DRAG, setDownloadDrag } from './core.js';
 import { openPicker, closePicker } from './picker.js';
 
 let V = null; // 지금 열린 미리보기 상태
@@ -102,6 +102,12 @@ export function openViewer(list, id) {
   stage.addEventListener('mousedown', onDragStart);
   stage.addEventListener('dblclick', (e) => { if (e.target.closest('.vpage')) toggleZoomAt(e); });
   el.addEventListener('click', onClick);
+  el.addEventListener('dragstart', (e) => {
+    const pg = e.target.closest?.('.vpage');
+    const s = cur();
+    if (!WIN_DRAG()) return;
+    if (!pg || !s || !setDownloadDrag(e, s, +pg.dataset.file || 0)) e.preventDefault();
+  });
   el.addEventListener('mousemove', onMove);
   stage.focus();
   show();
@@ -190,6 +196,8 @@ function layout(resetScroll) {
       const d = document.createElement('div');
       d.className = 'vpage';
       d.dataset.key = want[i];
+      d.dataset.file = p.file ?? 0;
+      if (WIN_DRAG() && p.kind !== 'bad') d.draggable = true; // Windows: 보고 있는 장을 끌어 다른 프로그램에 (원본)
       if (p.kind === 'img') { const im = p.img.cloneNode(); im.alt = ''; im.draggable = false; d.append(im); }
       else if (p.kind === 'pdf') { const c = document.createElement('canvas'); d.append(c); }
       else d.innerHTML = '<div class="pl">이 파일은 미리 볼 수 없어요</div>';

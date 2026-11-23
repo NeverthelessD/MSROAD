@@ -1,7 +1,7 @@
 // MSROAD — 로드(코드별 분류) · 검색 · 카드 목록
 // made by. Nevertheless_D
 import {
-  S, $, $$, esc, api, on, emit, ROADS, CROSS, thumbURL, saveUI, roadOf, chordOrder, plate,
+  S, $, $$, esc, api, on, emit, ROADS, CROSS, thumbURL, WIN_DRAG, setDownloadDrag, saveUI, roadOf, chordOrder, plate,
   prepTitle, parseQuery, matchSheet, highlight, toast, shortPath, modalOpen, versionsOf, IS_SHELL, logoSVG, L, setPlatform,
 } from './core.js';
 import { openViewer, viewerOpen, viewerSync, renderPdfThumb } from './viewer.js';
@@ -174,8 +174,8 @@ function cardHTML(s, hits) {
   const mt = [];
   if (others.length) mt.push(`<span>다른 키</span>${others.slice(0, 4).map((k) => plate(k, 'ghost')).join('')}${others.length > 4 ? `<span>+${others.length - 4}</span>` : ''}`);
   else if (s.dir) mt.push(`<span class="dir">${esc(s.dir)}</span>`);
-  return `<div class="card r${s._road} ${multi ? 'multi' : ''}" data-id="${s.id}" tabindex="0">
-    <div class="sheet"><img loading="lazy" decoding="async" alt="" src="${thumbURL(s)}" data-kind="${p0.kind}"${IS_SHELL ? ' draggable="false"' : ''}>
+  return `<div class="card r${s._road} ${multi ? 'multi' : ''}" data-id="${s.id}" tabindex="0"${WIN_DRAG() ? ' draggable="true"' : ''}>
+    <div class="sheet"><img loading="lazy" decoding="async" alt="" src="${thumbURL(s)}" data-kind="${p0.kind}"${IS_SHELL || WIN_DRAG() ? ' draggable="false"' : ''}>
       <div class="tl">${s.chord ? plate(s.chord) : ''}</div>${s.new ? '<span class="newtag">새 악보</span>' : ''}
       <div class="badges">${pdf ? '<span class="badge">PDF</span>' : ''}${multi ? `<span class="badge">${s.pages.length}장</span>` : ''}</div></div>
     <div class="cap"><b title="${esc(s.pages.map((p) => p.name).join('\n'))}">${highlight(s, hits)}</b><div class="mt">${mt.join('')}</div></div>
@@ -417,6 +417,19 @@ if (IS_SHELL) {
   addEventListener('pointerup', () => { press = null; });
   addEventListener('pointercancel', () => { press = null; });
 }
+
+// Windows (Edge · Chrome 앱 창, 1.3.5): 그림을 그냥 끌면 썸네일이 넘어가요. 그래서 그림 대신 카드를 끌게 하고
+// 'DownloadURL'(Chromium)로 원본 파일 주소를 넘겨요 → 놓는 순간 원본 파일이 만들어져 탐색기 · 바탕 화면 · 카카오톡 · 한글 등에 원본 해상도로 들어가요.
+// DownloadURL 은 파일 하나만 돼서 여러 장 악보는 첫 장이 들어가요. 미리보기에서 보고 있는 장을 끌면 그 장이 들어가요(viewer.js).
+$('#main').addEventListener('dragstart', (e) => {
+  if (!WIN_DRAG()) return;
+  const card = e.target.closest('.card');
+  const s = card && S.byId.get(card.dataset.id);
+  if (!s) return;
+  if (!setDownloadDrag(e, s, 0)) { e.preventDefault(); return; }
+  const sheet = card.querySelector('.sheet');
+  if (sheet) { const r = sheet.getBoundingClientRect(); e.dataTransfer.setDragImage(sheet, e.clientX - r.left, e.clientY - r.top); }
+});
 
 // ── 검색 ──
 const q = $('#q');

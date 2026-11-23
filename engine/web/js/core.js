@@ -102,6 +102,18 @@ window.addEventListener('unhandledrejection', (e) => { if (!e.reason?.offline) r
 export const thumbURL = (s, i = 0) => `/api/thumb?id=${s.id}&p=${i}&v=${s.pages[i]?.mod || 0}&t=${T}`;
 export const fileURL = (s, i = 0) => `/api/file?id=${s.id}&p=${i}&v=${s.pages[i]?.mod || 0}&t=${T}`;
 
+// Windows 앱 창(Edge · Chrome)에서 악보를 끌어 다른 프로그램에 넣을 때: 'DownloadURL' 로 원본 파일을 넘겨요 (1.3.5, main.js · viewer.js)
+export const WIN_DRAG = () => L.win && !IS_SHELL;
+const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.pdf': 'application/pdf' };
+export function setDownloadDrag(e, s, i = 0) {
+  const p = s.pages[i];
+  if (!p || !e.dataTransfer) return false;
+  const url = new URL(fileURL(s, i), location.href).href;
+  e.dataTransfer.effectAllowed = 'copy';
+  e.dataTransfer.setData('DownloadURL', `${MIME[(p.ext || '').toLowerCase()] || 'application/octet-stream'}:${p.name}:${url}`);
+  return true;
+}
+
 let uiTimer;
 export function saveUI() {
   clearTimeout(uiTimer);

@@ -26,13 +26,20 @@
 ### 다음에 할 수 있는 일
 - [x] 실제 맥(macOS 27)에서 1.1.0 실행 확인 (2026-10-22, 사용자)
 - [ ] 1.3.5 끌어서 다른 앱에 넣기(원본 해상도)를 사용자 맥에서 확인 (카카오톡 · 키노트 · 한글 등)
-- [ ] Windows 판도 끌어 넣기를 원본으로 (지금은 썸네일) — 사용자가 원하면
+- [ ] Windows 1.3.5 끌어 넣기(원본)를 실제 Windows PC 에서 확인 (바탕 화면 · 카카오톡 · 한글)
 - [ ] 1.3.3 쪽마다 다른 틀을 사용자 맥에서 확인 (맥 빌드 서버 21/21, 맥 · Windows 출시 완료)
 - [ ] 1.2.0~1.3.0 편집 · 인쇄를 사용자 맥에서 확인 (실제 프린터 인쇄 · A3 · 양면 · 여백 글자가 프린터 인쇄 가능 영역 안에 들어가는지)
 - [x] Windows 버전 1.2.1 (2026-10-23, Wine 에서 확인)
 - [ ] 실제 Windows PC 에서 확인: SmartScreen, Edge 앱 창, PDF 인쇄 창(Edge PDF 보기) · Ctrl+P, 탐색기 /select, 한글 경로 · OneDrive 폴더
 
 ### 작업 기록
+- 2026-11-23 Windows 1.3.5 — 사용자 요청: Windows 판도 끌어 넣기를 원본 해상도로. Edge · Chrome 앱 창은 그림을 끌면 썸네일(이미지 + 그 파일 내용)이 넘어가서,
+  Windows 에서는 카드의 그림 draggable=false · 카드(div) draggable=true, dragstart 에서 `DownloadURL`(`mime:원본 이름:/api/file 주소`)만 넣음
+  → Chromium 이 놓는 순간 원본을 내려받아 진짜 파일(CF_HDROP)로 넘김(바탕 화면 · 탐색기 · 카카오톡 · 한글 등). /api/file 은 HEIC 말고는 원본 그대로.
+  DownloadURL 은 파일 하나만 돼서 **여러 장 악보는 카드에서 첫 장**, 미리보기에서는 보고 있는 장(.vpage data-file, draggable)을 끌면 그 장.
+  확대해서 '잡기'(grab) 중이면 끌기는 화면 옮기기. 코드: core.js `WIN_DRAG` · `setDownloadDrag`, main.js · viewer.js 의 dragstart. ⌫ 뒤로 가기도 Windows 에 함께(Ctrl+[).
+  리눅스 Playwright(MSROAD_FAKE_OS=windows): DownloadURL 이름 · 주소 확인, 그 주소 내용 = 원본 바이트, 미리보기 2번째 장 → `_2` 파일, 맥 창 시험도 다시 통과.
+  Wine 은 이번 작업 환경에서 wine 자체가 멈춰(segfault) 못 돌림 — 실행기 · 엔진 Go 코드는 1.3.3 과 같고 화면(JS)만 바뀜. 실제 Windows 에서 끌어 놓기 확인 필요.
 - 2026-11-23 v1.3.5 (맥) — 사용자 요청: 화면의 악보(카드)를 끌어 다른 프로그램에 놓으면 **썸네일 크기**로 들어감 → **원본 해상도 그대로**.
   원인: 앱 창(WKWebView)이 카드의 `<img>`(= /api/thumb, 640px 썸네일)를 그대로 끌기로 넘김.
   고침: 맥 앱 창에서는 WebKit 끌기를 끄고(그림 draggable=false, `.shell .card { -webkit-user-drag:none }`), 카드를 누른 채 5px 움직이면
@@ -41,7 +48,7 @@
   끝나면 WebKit 에 mouseUp 을 보내고 화면은 그 클릭을 무시(draggedOut). 경로는 새 `/api/paths`(토큰 필요).
   **주의(겪은 것)**: 처음엔 WebKit `dragstart` 를 preventDefault 하고 시작했는데, WebKit 이 곧바로 끌기 보드를 비워서(types=[]) 받는 앱이 아무것도 못 받았음
   → dragstart 를 아예 안 일으키는 지금 방식으로. 맥 시험 K1 · K2: 시험 스크립트(scripts/dragout-test.swift)가 '다른 앱' 창을 띄워 진짜 마우스로
-  끌어 놓고 받은 파일 = 원본(경로 · 크기)인지 확인(1장 · 2장 모두 통과). Windows 판은 그대로(썸네일) — 필요하면 Edge 의 DownloadURL 끌기로.
+  끌어 놓고 받은 파일 = 원본(경로 · 크기)인지 확인(1장 · 2장 모두 통과). Windows 판은 같은 날 1.3.5 로 따로(아래).
   **공통 기능도 함께 넣음**: ⌫ · ⌘[ 뒤로 가기(목록: ROAD · 코드 이동 기록, 찾는 중이면 찾기 끝 / 미리보기: 닫기 / 편집: 고른 게 있으면 지우기가 먼저,
   없으면 악보 보기로, 세트 목록에서도). 창 옮기기: MSROAD 는 보통 제목 막대(투명 아님)라 DragStrip 이 필요 없음 → 맥 시험 M1 만 추가(통과).
   launcher.log 시각에 ms. 사용 가이드에 '다른 앱에 넣기' · '뒤로 가기' 추가. 맥 빌드 서버 27/27.
