@@ -25,12 +25,26 @@
 
 ### 다음에 할 수 있는 일
 - [x] 실제 맥(macOS 27)에서 1.1.0 실행 확인 (2026-10-22, 사용자)
+- [ ] 1.3.5 끌어서 다른 앱에 넣기(원본 해상도)를 사용자 맥에서 확인 (카카오톡 · 키노트 · 한글 등)
+- [ ] Windows 판도 끌어 넣기를 원본으로 (지금은 썸네일) — 사용자가 원하면
 - [ ] 1.3.3 쪽마다 다른 틀을 사용자 맥에서 확인 (맥 빌드 서버 21/21, 맥 · Windows 출시 완료)
 - [ ] 1.2.0~1.3.0 편집 · 인쇄를 사용자 맥에서 확인 (실제 프린터 인쇄 · A3 · 양면 · 여백 글자가 프린터 인쇄 가능 영역 안에 들어가는지)
 - [x] Windows 버전 1.2.1 (2026-10-23, Wine 에서 확인)
 - [ ] 실제 Windows PC 에서 확인: SmartScreen, Edge 앱 창, PDF 인쇄 창(Edge PDF 보기) · Ctrl+P, 탐색기 /select, 한글 경로 · OneDrive 폴더
 
 ### 작업 기록
+- 2026-11-23 v1.3.5 (맥) — 사용자 요청: 화면의 악보(카드)를 끌어 다른 프로그램에 놓으면 **썸네일 크기**로 들어감 → **원본 해상도 그대로**.
+  원인: 앱 창(WKWebView)이 카드의 `<img>`(= /api/thumb, 640px 썸네일)를 그대로 끌기로 넘김.
+  고침: 맥 앱 창에서는 WebKit 끌기를 끄고(그림 draggable=false, `.shell .card { -webkit-user-drag:none }`), 카드를 누른 채 5px 움직이면
+  화면이 껍데기에 `dragFiles`(원본 경로 · 끌기 그림 PNG · 크기 · 잡은 자리)를 보냄 → main.swift 가 `MSWebView.beginDraggingSession` 으로
+  원본 파일 URL(여러 장이면 모두)을 끌기 시작(NSURL = Finder 에서 끈 것과 같음, 다른 앱에는 '복사'만, 이 창 안은 아무 일 없음).
+  끝나면 WebKit 에 mouseUp 을 보내고 화면은 그 클릭을 무시(draggedOut). 경로는 새 `/api/paths`(토큰 필요).
+  **주의(겪은 것)**: 처음엔 WebKit `dragstart` 를 preventDefault 하고 시작했는데, WebKit 이 곧바로 끌기 보드를 비워서(types=[]) 받는 앱이 아무것도 못 받았음
+  → dragstart 를 아예 안 일으키는 지금 방식으로. 맥 시험 K1 · K2: 시험 스크립트(scripts/dragout-test.swift)가 '다른 앱' 창을 띄워 진짜 마우스로
+  끌어 놓고 받은 파일 = 원본(경로 · 크기)인지 확인(1장 · 2장 모두 통과). Windows 판은 그대로(썸네일) — 필요하면 Edge 의 DownloadURL 끌기로.
+  **공통 기능도 함께 넣음**: ⌫ · ⌘[ 뒤로 가기(목록: ROAD · 코드 이동 기록, 찾는 중이면 찾기 끝 / 미리보기: 닫기 / 편집: 고른 게 있으면 지우기가 먼저,
+  없으면 악보 보기로, 세트 목록에서도). 창 옮기기: MSROAD 는 보통 제목 막대(투명 아님)라 DragStrip 이 필요 없음 → 맥 시험 M1 만 추가(통과).
+  launcher.log 시각에 ms. 사용 가이드에 '다른 앱에 넣기' · '뒤로 가기' 추가. 맥 빌드 서버 27/27.
 - 2026-11-08 노트만 수정 — CLAUDE.md 첫머리와 「결정 사항 › 방식」이 1.0.x 시절(bash 실행기 + Chrome 창) 설명 그대로라 다른 Claude 가
   지금 구조로 오해했어요. 지금 구조(Dock 앱 · Swift 껍데기 · 지킴이)로 바로잡고 예전 방식은 '지난 방식'으로 표시. 앱 코드는 그대로.
 - 2026-11-02 v1.3.4 — 사용자 제보(CUTROAD 에서): Spotlight 에 같은 앱이 두 개(응용 프로그램 + 백업 폴더) 보임. 업데이트 때 이전 버전을 보관하는
@@ -140,7 +154,7 @@ app/Info.plist         LSUIElement 없음(= Dock 에 보임), NSAllowsLocalNetwo
 engine/                Go 엔진. MSROAD_SHELL=native 일 때: 쉬기(idle) 끔, 업데이트 재시작은 표시 파일만 남기고 종료
 engine/supervise.go    지킴이: 엔진을 자식으로 켜고 '고장'일 때만 다시 켬. 종료 신호는 항상 따름. 부모(앱)가 사라지면 끝
 scripts/build-mac.sh   (맥 전용) Go+Swift 빌드 → 번들 → codesign --deep -s - → zip 2개(업데이트용 · 처음 설치용)
-scripts/smoke-mac.sh   (맥 전용) 실제 실행 시험 A~H: 켜기·화면·자식 관계·다시 열기·고장 복구·⌘Q·종료 버튼·앱 강제 종료·업데이트 재실행·1.0.4 경로
+scripts/smoke-mac.sh   (맥 전용) 실제 실행 시험 A~H · M(창 옮기기, drag-test.swift) · K(끌어 넣기, dragout-test.swift) · P(편집 · 인쇄): 켜기·화면·자식 관계·다시 열기·고장 복구·⌘Q·종료 버튼·앱 강제 종료·업데이트 재실행·1.0.4 경로
 scripts/ci-mac.sh      빌드 서버 진입점: 빌드 → 시험 → ci-results 브랜치에 결과(status.json · results.txt · 스크린샷 · zip · 기록) 강제 푸시
 scripts/release.sh     ci-results 가 지금 VERSION/통과인지 확인 → releases/MSROAD-<v>.zip · latest.json · dist/MSROAD.zip
 scripts/build.sh       (1.1.0 부터 쓰지 않음 — 안내만 출력)
